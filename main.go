@@ -10,8 +10,13 @@ import (
 
 const DefaultFEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
+// const DefaultFEN = "r2qkb1r/ppp2ppp/4p1b1/4P3/4p3/2PB1P2/P1P3PP/R1BQK2R w KQkq - 0 11"
+//const DefaultFEN = "rnbq1bnr/ppppkppp/4pP2/8/8/8/PPPPP1PP/RNBQKBNR b KQ - 0 3"
+
 func main() {
 	cpuprofile := flag.String("cpuprofile", "", "write cpu profile to file")
+	fen := flag.String("fen", DefaultFEN, "FEN string")
+	depth := flag.Int("depth", 1, "depth")
 
 	flag.Parse()
 	if *cpuprofile != "" {
@@ -22,29 +27,10 @@ func main() {
 		pprof.StartCPUProfile(f)
 		defer pprof.StopCPUProfile()
 	}
-	p, err := Parse(DefaultFEN)
+	p, err := Parse(*fen)
 	if err != nil {
 		panic(err)
 	}
-	depth := 5
-	fmt.Printf("Node(depth = %d): %d\n", depth, perft(p, depth, true))
-}
-
-var printboard = false
-
-func perft(p Position, depth int, print bool) int {
-	if depth == 0 {
-		return 1
-	}
-	var nodes int
-	for _, m := range LegalMoves(p) {
-		p.DoMove(m)
-		newNodes := perft(p, depth-1, false)
-		if print {
-			fmt.Printf("%s: %d\n", m, newNodes)
-		}
-		nodes += newNodes
-		p.UndoMove(m)
-	}
-	return nodes
+	fmt.Println(p)
+	fmt.Printf("Node(depth = %d): %d\n", *depth, Perft(p, *depth, true, os.Stdout))
 }

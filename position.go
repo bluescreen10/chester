@@ -4,27 +4,134 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
+)
+
+type Square int8
+
+func (s Square) RankAndFile() (int8, int8) {
+	return 7 - int8(s/8), int8(s % 8)
+}
+
+func SquareFromRankAndFile(rank, file int8) Square {
+	return Square((7-rank)*8 + file)
+}
+
+const (
+	SQ_A8 Square = iota
+	SQ_B8
+	SQ_C8
+	SQ_D8
+	SQ_E8
+	SQ_F8
+	SQ_G8
+	SQ_H8
+	SQ_A7
+	SQ_B7
+	SQ_C7
+	SQ_D7
+	SQ_E7
+	SQ_F7
+	SQ_G7
+	SQ_H7
+	SQ_A6
+	SQ_B6
+	SQ_C6
+	SQ_D6
+	SQ_E6
+	SQ_F6
+	SQ_G6
+	SQ_H6
+	SQ_A5
+	SQ_B5
+	SQ_C5
+	SQ_D5
+	SQ_E5
+	SQ_F5
+	SQ_G5
+	SQ_H5
+	SQ_A4
+	SQ_B4
+	SQ_C4
+	SQ_D4
+	SQ_E4
+	SQ_F4
+	SQ_G4
+	SQ_H4
+	SQ_A3
+	SQ_B3
+	SQ_C3
+	SQ_D3
+	SQ_E3
+	SQ_F3
+	SQ_G3
+	SQ_H3
+	SQ_A2
+	SQ_B2
+	SQ_C2
+	SQ_D2
+	SQ_E2
+	SQ_F2
+	SQ_G2
+	SQ_H2
+	SQ_A1
+	SQ_B1
+	SQ_C1
+	SQ_D1
+	SQ_E1
+	SQ_F1
+	SQ_G1
+	SQ_H1
 )
 
 const (
 	colorMask Piece = 0x08
 )
 
+var statePool = sync.Pool{
+	New: func() any {
+		return &State{}
+	},
+}
+
 type State struct {
-	WhiteToMove          bool
+	WhiteToMove bool
+
+	// Castling rights
 	WhiteQueenSideCastle bool
 	WhiteKingSideCastle  bool
 	BlackQueenSideCastle bool
 	BlackKingSideCastle  bool
-	EnPassantFile        uint8
-	HalfMoves            uint8
-	FullMoves            uint16
-	Previous             *State
+
+	// En passant file
+	EnPassantFile uint8
+
+	// Moves
+	HalfMoves uint8
+	FullMoves uint16
+
+	// Previous state
+	LastMove *Move
+	Capture  Piece
+	Previous *State
+}
+
+func (s *State) Reset() {
+	s.WhiteToMove = false
+	s.WhiteKingSideCastle = false
+	s.WhiteQueenSideCastle = false
+	s.BlackKingSideCastle = false
+	s.BlackQueenSideCastle = false
+	s.EnPassantFile = 0
+	s.HalfMoves = 0
+	s.FullMoves = 0
+	s.Previous = nil
 }
 
 type Position struct {
-	Board [64]Piece
-	State *State
+	Board    [Square(64)]Piece
+	State    *State
+	Occupied BitBoard
 }
 
 func Parse(fen string) (Position, error) {
@@ -61,7 +168,8 @@ func Parse(fen string) (Position, error) {
 		}
 	}
 
-	pos.State = &State{}
+	pos.State = statePool.Get().(*State)
+	pos.State.Reset()
 
 	if parts[1] == "w" || parts[1] == "W" {
 		pos.State.WhiteToMove = true
@@ -133,14 +241,24 @@ func parsePiece(c byte) (Piece, error) {
 }
 
 func (p *Position) Set(rank, file int, piece Piece) {
-	p.Board[rank*8+file] = piece
+	index := (7-rank)*8 + file
+	bit := BitBoard(1) << uint(index)
+
+	if piece == Empty {
+		p.Occupied &^= bit
+	} else {
+		p.Occupied |= bit
+	}
+
+	p.Board[index] = piece
 }
 
 func (p Position) Get(rank, file int) Piece {
-	return p.Board[rank*8+file]
+	index := (7-rank)*8 + file
+	return p.Board[index]
 }
 
-func (p Position) String() string {
+func (p Position) Fen() string {
 	fen := strings.Builder{}
 
 	for rank := 7; rank >= 0; rank-- {
@@ -173,25 +291,25 @@ func (p Position) String() string {
 
 	fen.WriteByte(' ')
 
-	if p.CanCastleKingSide(White) {
+	if p.CanWhiteCastleKingSide() {
 		fen.WriteByte('K')
 	} else {
 		fen.WriteByte('-')
 	}
 
-	if p.CanCastleQueenSide(White) {
+	if p.CanWhiteCastleQueenSide() {
 		fen.WriteByte('Q')
 	} else {
 		fen.WriteByte('-')
 	}
 
-	if p.CanCastleKingSide(Black) {
+	if p.CanBlackCastleKingSide() {
 		fen.WriteByte('k')
 	} else {
 		fen.WriteByte('-')
 	}
 
-	if p.CanCastleQueenSide(Black) {
+	if p.CanBlackCastleQueenSide() {
 		fen.WriteByte('q')
 	} else {
 		fen.WriteByte('-')
@@ -216,17 +334,20 @@ func (p Position) String() string {
 	return fen.String()
 }
 
-func (p Position) PrettyPrint() string {
-	board := strings.Builder{}
+func (p Position) String() string {
+	builder := strings.Builder{}
 
+	builder.WriteString("+---+---+---+---+---+---+---+---+\n")
 	for rank := 7; rank >= 0; rank-- {
+		builder.WriteByte('|')
 		for file := 0; file < 8; file++ {
-			board.WriteString(p.Get(rank, file).String())
+			builder.WriteString(fmt.Sprintf(" %s |", p.Get(rank, file)))
 		}
-		board.WriteByte('\n')
+		builder.WriteString(fmt.Sprintf(" %d\n", rank+1))
+		builder.WriteString("+---+---+---+---+---+---+---+---+\n")
 	}
-
-	return board.String()
+	builder.WriteString("  a   b   c   d   e   f   g   h\n")
+	return builder.String()
 }
 
 func (p Position) SideToMove() Piece {
@@ -240,24 +361,24 @@ func (p Position) IsEnPassant() bool {
 	return p.State.EnPassantFile != 0
 }
 
-func (p Position) EnPassantFile() int {
-	return int(p.State.EnPassantFile - 1)
+func (p Position) EnPassantFile() int8 {
+	return int8(p.State.EnPassantFile - 1)
 }
 
-func (p *Position) CanCastleKingSide(stm Piece) bool {
-	if p.SideToMove() == White {
-		return p.State.WhiteKingSideCastle
-	} else {
-		return p.State.BlackKingSideCastle
-	}
+func (p *Position) CanWhiteCastleKingSide() bool {
+	return p.State.WhiteKingSideCastle
 }
 
-func (p *Position) CanCastleQueenSide(stm Piece) bool {
-	if p.SideToMove() == White {
-		return p.State.WhiteQueenSideCastle
-	} else {
-		return p.State.BlackKingSideCastle
-	}
+func (p *Position) CanWhiteCastleQueenSide() bool {
+	return p.State.WhiteQueenSideCastle
+}
+
+func (p *Position) CanBlackCastleKingSide() bool {
+	return p.State.BlackKingSideCastle
+}
+
+func (p *Position) CanBlackCastleQueenSide() bool {
+	return p.State.BlackQueenSideCastle
 }
 
 func (p *Position) HalfMoves() uint8 {
@@ -268,89 +389,159 @@ func (p *Position) FullMoves() uint16 {
 	return p.State.FullMoves
 }
 
-func (p *Position) DoMove(m Move) {
+func (p *Position) Do(m Move) {
 
-	newState := *p.State
+	newState := statePool.Get().(*State)
 
-	from, to := int(m.From), int(m.To)
+	newState.Previous = p.State
+	newState.HalfMoves = p.State.HalfMoves + 1
+	newState.FullMoves = p.State.FullMoves
+	newState.WhiteKingSideCastle = p.State.WhiteKingSideCastle
+	newState.WhiteQueenSideCastle = p.State.WhiteQueenSideCastle
+	newState.BlackKingSideCastle = p.State.BlackKingSideCastle
+	newState.BlackQueenSideCastle = p.State.BlackQueenSideCastle
 	newState.EnPassantFile = 0
+	newState.LastMove = &m
 
-	switch m.Type {
-	case Default, Capture:
-		p.Board[to] = p.Board[from]
+	from, to := m.From, m.To
+	bitFrom, bitTo := BitBoard(1)<<uint(m.From), BitBoard(1)<<uint(m.To)
+	piece := p.Board[from]
+	enemy := p.Board[to]
+	newState.Capture = enemy
+
+	switch piece {
+	case WhiteBishop, BlackBishop, WhiteKnight, BlackKnight, WhiteQueen, BlackQueen:
+		p.Board[to] = piece
 		p.Board[from] = Empty
-		if (m.Piece == WhitePawn || m.Piece == BlackPawn) && (to-from == 16 || to-from == -16) {
-			newState.EnPassantFile = uint8(to%8 + 1)
-		}
-
-		if m.Piece == WhiteKing {
-			newState.WhiteKingSideCastle = false
+		p.Occupied |= bitTo
+		p.Occupied &^= bitFrom
+	case WhiteRook:
+		if from == SQ_A1 {
 			newState.WhiteQueenSideCastle = false
 		}
 
-		if m.Piece == BlackKing {
-			newState.BlackKingSideCastle = false
-			newState.BlackQueenSideCastle = false
-		}
-
-		if m.Piece == WhiteRook && from == 0 {
+		if from == SQ_H1 {
 			newState.WhiteKingSideCastle = false
 		}
 
-		if m.Piece == WhiteRook && from == 7 {
-			newState.WhiteQueenSideCastle = false
-		}
-
-		if m.Piece == BlackRook && from == 56 {
-			newState.BlackKingSideCastle = false
-		}
-
-		if m.Piece == BlackRook && from == 63 {
+		p.Board[to] = piece
+		p.Board[from] = Empty
+		p.Occupied |= bitTo
+		p.Occupied &^= bitFrom
+	case BlackRook:
+		if from == SQ_A8 {
 			newState.BlackQueenSideCastle = false
 		}
 
-	case EnPassant:
-		p.Board[to] = p.Board[from]
+		if from == SQ_H8 {
+			newState.BlackKingSideCastle = false
+		}
+
+		p.Board[to] = piece
 		p.Board[from] = Empty
-		if p.SideToMove() == White {
-			p.Board[to-8] = Empty
+		p.Occupied |= bitTo
+		p.Occupied &^= bitFrom
+
+	case WhiteKing:
+		newState.WhiteKingSideCastle = false
+		newState.WhiteQueenSideCastle = false
+		if m.Type == Castle {
+			p.Board[to] = piece
+			if to == SQ_G1 {
+				p.Board[from] = Empty
+				p.Board[SQ_F1] = WhiteRook
+				p.Board[SQ_H1] = Empty
+				p.Board[to] = piece
+				p.Occupied |= BitBoard(3) << SQ_F1
+				p.Occupied &^= BitBoard(9) << SQ_E1
+			} else {
+				p.Board[from] = Empty
+				p.Board[SQ_D1] = WhiteRook
+				p.Board[to] = piece
+				p.Occupied |= bitTo
+				p.Occupied |= BitBoard(3) << SQ_C1
+				p.Occupied &^= BitBoard(17) << SQ_A1
+			}
 		} else {
+			p.Board[to] = piece
+			p.Board[from] = Empty
+			p.Occupied |= bitTo
+			p.Occupied &^= bitFrom
+		}
+	case BlackKing:
+		newState.BlackKingSideCastle = false
+		newState.BlackQueenSideCastle = false
+		if m.Type == Castle {
+			p.Board[to] = piece
+			if to == SQ_G8 {
+				p.Board[from] = BlackRook
+				p.Board[SQ_H8] = Empty
+				p.Board[to] = piece
+				p.Occupied |= BitBoard(3) << SQ_F8
+				p.Occupied &^= BitBoard(9) << SQ_E8
+			} else {
+				p.Board[from] = Empty
+				p.Board[SQ_D8] = BlackRook
+				p.Board[to] = piece
+				p.Occupied |= bitTo
+				p.Occupied |= BitBoard(3) << SQ_C8
+				p.Occupied &^= BitBoard(17) << SQ_A8
+			}
+		} else {
+			p.Board[to] = piece
+			p.Board[from] = Empty
+			p.Occupied |= bitTo
+			p.Occupied &^= bitFrom
+		}
+	case WhitePawn:
+		switch m.Type {
+		case PromotionToKnight:
+			piece = WhiteKnight
+		case PromotionToBishop:
+			piece = WhiteBishop
+		case PromotionToRook:
+			piece = WhiteRook
+		case PromotionToQueen:
+			piece = WhiteQueen
+		case EnPassant:
+			newState.Capture = BlackPawn
 			p.Board[to+8] = Empty
+			p.Occupied &^= bitTo << 8
 		}
-	case CastleKingSide:
-		if p.SideToMove() == White {
-			newState.WhiteKingSideCastle = false
-			newState.WhiteQueenSideCastle = false
-			p.Board[5] = WhiteRook
-			p.Board[7] = Empty
-			p.Board[4] = WhiteKing
-		} else {
-			newState.BlackKingSideCastle = false
-			newState.BlackQueenSideCastle = false
-			p.Board[61] = BlackRook
-			p.Board[63] = Empty
-			p.Board[60] = BlackKing
-		}
-	case CastleQueenSide:
-		if p.SideToMove() == White {
-			newState.WhiteKingSideCastle = false
-			newState.WhiteQueenSideCastle = false
-			p.Board[3] = WhiteRook
-			p.Board[0] = Empty
-			p.Board[4] = WhiteKing
-		} else {
-			newState.BlackKingSideCastle = false
-			newState.BlackQueenSideCastle = false
-			p.Board[59] = BlackRook
-			p.Board[56] = Empty
-			p.Board[60] = BlackKing
-		}
-	case Promotion:
-		p.Board[to] = m.Piece
-		p.Board[from] = Empty
-	}
 
-	newState.HalfMoves++
+		if from-to == 16 {
+			newState.EnPassantFile = uint8(to%8) + 1
+		}
+
+		p.Board[to] = piece
+		p.Board[from] = Empty
+		p.Occupied |= bitTo
+		p.Occupied &^= bitFrom
+	case BlackPawn:
+		switch m.Type {
+		case PromotionToKnight:
+			piece = BlackKnight
+		case PromotionToBishop:
+			piece = BlackBishop
+		case PromotionToRook:
+			piece = BlackRook
+		case PromotionToQueen:
+			piece = BlackQueen
+		case EnPassant:
+			newState.Capture = WhitePawn
+			p.Board[to-8] = Empty
+			p.Occupied &^= bitTo >> 8
+		}
+
+		if to-from == 16 {
+			newState.EnPassantFile = uint8(to%8) + 1
+		}
+
+		p.Board[to] = piece
+		p.Board[from] = Empty
+		p.Occupied |= bitTo
+		p.Occupied &^= bitFrom
+	}
 
 	if p.SideToMove() == Black {
 		newState.WhiteToMove = true
@@ -359,50 +550,125 @@ func (p *Position) DoMove(m Move) {
 		newState.WhiteToMove = false
 	}
 
-	newState.Previous = p.State
-	p.State = &newState
+	p.State = newState
 }
 
-func (p *Position) UndoMove(m Move) {
-	from, to := int(m.From), int(m.To)
-
-	switch m.Type {
-	case Default:
-		p.Board[from] = p.Board[to]
-		p.Board[to] = Empty
-	case Capture:
-		p.Board[from] = p.Board[to]
-		p.Board[to] = m.Enemy
-	case EnPassant:
-		p.Board[from] = p.Board[to]
-		p.Board[to] = Empty
-		if p.SideToMove() == White {
-			p.Board[to+8] = WhitePawn
-		} else {
-			p.Board[to-8] = BlackPawn
-		}
-	case CastleKingSide:
-		if p.SideToMove() == White {
-			p.Board[7] = WhiteRook
-			p.Board[5] = Empty
-		} else {
-			p.Board[63] = BlackRook
-			p.Board[61] = Empty
-		}
-	case CastleQueenSide:
-		if p.SideToMove() == White {
-			p.Board[0] = WhiteRook
-			p.Board[3] = Empty
-		} else {
-			p.Board[56] = BlackRook
-			p.Board[59] = Empty
-		}
-	case Promotion:
-		p.Board[from] = WhitePawn
-		p.Board[to] = m.Enemy
+func (p *Position) Undo() {
+	m := p.State.LastMove
+	if m == nil {
+		return
 	}
 
-	if p.State.Previous != nil {
-		p.State = p.State.Previous
+	from, to := m.From, m.To
+	bitFrom, bitTo := BitBoard(1)<<uint8(from), BitBoard(1)<<uint(to)
+	piece := p.Board[to]
+	enemy := p.State.Capture
+
+	switch piece {
+	case WhiteKnight, WhiteBishop, WhiteRook, WhiteQueen:
+		if m.Type == PromotionToKnight || m.Type == PromotionToBishop || m.Type == PromotionToRook || m.Type == PromotionToQueen {
+			piece = WhitePawn
+		}
+		p.Board[to] = enemy
+		p.Board[from] = piece
+		p.Occupied |= bitFrom
+		if enemy == Empty {
+			p.Occupied &^= bitTo
+		}
+	case BlackKnight, BlackBishop, BlackRook, BlackQueen:
+		if m.Type == PromotionToKnight || m.Type == PromotionToBishop || m.Type == PromotionToRook || m.Type == PromotionToQueen {
+			piece = BlackPawn
+		}
+		p.Board[to] = enemy
+		p.Board[from] = piece
+		p.Occupied |= bitFrom
+		if enemy == Empty {
+			p.Occupied &^= bitTo
+		}
+	case WhitePawn:
+		if m.Type != EnPassant {
+			p.Board[to] = enemy
+			p.Board[from] = piece
+			p.Occupied |= bitFrom
+			if enemy == Empty {
+				p.Occupied &^= bitTo
+			}
+		} else {
+			p.Board[to] = Empty
+			p.Board[to+8] = enemy
+			p.Board[from] = piece
+			p.Occupied |= bitFrom
+			p.Occupied |= bitTo << uint(8)
+			p.Occupied &^= bitTo
+		}
+	case BlackPawn:
+		if m.Type != EnPassant {
+			p.Board[to] = enemy
+			p.Board[from] = piece
+			p.Occupied |= bitFrom
+			if enemy == Empty {
+				p.Occupied &^= bitTo
+			}
+		} else {
+			p.Board[to] = Empty
+			p.Board[to-8] = enemy
+			p.Board[from] = piece
+			p.Occupied |= bitFrom
+			p.Occupied |= bitTo >> uint(8)
+			p.Occupied &^= bitTo
+		}
+	case WhiteKing:
+		if m.Type != Castle {
+			p.Board[to] = enemy
+			p.Board[from] = piece
+			p.Occupied |= bitFrom
+			if enemy == Empty {
+				p.Occupied &^= bitTo
+			}
+		} else {
+			if to == SQ_G1 {
+				p.Board[from] = piece
+				p.Board[to] = Empty
+				p.Board[SQ_F1] = Empty
+				p.Board[SQ_H1] = WhiteRook
+				p.Occupied |= BitBoard(9) << SQ_E1
+				p.Occupied &^= BitBoard(3) << SQ_F1
+			} else {
+				p.Board[from] = piece
+				p.Board[to] = Empty
+				p.Board[SQ_D1] = Empty
+				p.Board[SQ_A1] = WhiteRook
+				p.Occupied |= BitBoard(17) << SQ_A1
+				p.Occupied &^= BitBoard(3) << SQ_C1
+			}
+		}
+	case BlackKing:
+		if m.Type != Castle {
+			p.Board[to] = enemy
+			p.Board[from] = piece
+			p.Occupied |= bitFrom
+			if enemy == Empty {
+				p.Occupied &^= bitTo
+			}
+		} else {
+			if to == SQ_G8 {
+				p.Board[from] = piece
+				p.Board[to] = Empty
+				p.Board[SQ_F8] = Empty
+				p.Board[SQ_H8] = BlackRook
+				p.Occupied |= BitBoard(9) << SQ_E8
+				p.Occupied &^= BitBoard(3) << SQ_F8
+			} else {
+				p.Board[from] = piece
+				p.Board[to] = Empty
+				p.Board[SQ_D8] = Empty
+				p.Board[SQ_A8] = BlackRook
+				p.Occupied |= BitBoard(17) << SQ_A8
+				p.Occupied &^= BitBoard(3) << SQ_C8
+			}
+		}
 	}
+
+	defer statePool.Put(p.State)
+	p.State = p.State.Previous
 }

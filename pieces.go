@@ -11,7 +11,7 @@ const (
 	WhiteQueen
 	WhiteKing
 
-	BlackPawn = iota + 2
+	BlackPawn Piece = iota + 2
 	BlackKnight
 	BlackBishop
 	BlackRook
@@ -25,7 +25,7 @@ const (
 func (p Piece) String() string {
 	switch p {
 	case Empty:
-		return "."
+		return " "
 	case WhitePawn:
 		return "P"
 	case WhiteKnight:
