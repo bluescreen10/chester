@@ -25,6 +25,6 @@ func (b BitBoard) String() string {
 		builder.WriteString(fmt.Sprintf(" %d \n", r+1))
 		builder.WriteString("+---+---+---+---+---+---+---+---+\n")
 	}
-	builder.WriteString("  a   b   c   d   e   f   g  h\n")
+	builder.WriteString("  a   b   c   d   e   f   g   h\n")
 	return builder.String()
 }
