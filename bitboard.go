@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math/bits"
 	"strings"
 )
 
@@ -27,4 +28,11 @@ func (b BitBoard) String() string {
 	}
 	builder.WriteString("  a   b   c   d   e   f   g   h\n")
 	return builder.String()
+}
+
+func (b BitBoard) PopLSB() (Square, BitBoard) {
+	s := Square(bits.TrailingZeros64(uint64(b)))
+	b &= b - 1
+	fmt.Printf("%b %b %b\n", int64(b), uint64(-int64(b)), int64(b)&-int64(b))
+	return s, b
 }
