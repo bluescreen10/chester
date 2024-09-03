@@ -1,9 +1,9 @@
 package main
 
-type Piece uint8
+type OldPiece uint8
 
 const (
-	Empty Piece = iota
+	OldEmpty OldPiece = iota
 	WhitePawn
 	WhiteKnight
 	WhiteBishop
@@ -11,20 +11,20 @@ const (
 	WhiteQueen
 	WhiteKing
 
-	BlackPawn Piece = iota + 2
+	BlackPawn OldPiece = iota + 2
 	BlackKnight
 	BlackBishop
 	BlackRook
 	BlackQueen
 	BlackKing
 
-	White Piece = 0
-	Black Piece = 8
+	OldWhite OldPiece = 0
+	OldBlack OldPiece = 8
 )
 
-func (p Piece) String() string {
+func (p OldPiece) String() string {
 	switch p {
-	case Empty:
+	case OldEmpty:
 		return " "
 	case WhitePawn:
 		return "P"
@@ -55,10 +55,15 @@ func (p Piece) String() string {
 	}
 }
 
-func (p Piece) Color() Piece {
-	return p & colorMask
+func (p OldPiece) Color() Color {
+	if p&colorMask != 0 {
+		return Black
+	} else {
+		return White
+
+	}
 }
 
-func IsSlidingPiece(p Piece) bool {
+func IsSlidingOldPiece(p OldPiece) bool {
 	return p == WhiteBishop || p == BlackBishop || p == WhiteRook || p == BlackRook || p == WhiteQueen || p == BlackQueen
 }

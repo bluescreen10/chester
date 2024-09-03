@@ -8,6 +8,28 @@ import (
 
 type BitBoard uint64
 
+const (
+	File_A BitBoard = 0x0101010101010101
+	File_B BitBoard = 0x0202020202020202
+	File_C BitBoard = 0x0404040404040404
+	File_D BitBoard = 0x0808080808080808
+	File_E BitBoard = 0x1010101010101010
+	File_F BitBoard = 0x2020202020202020
+	File_G BitBoard = 0x4040404040404040
+	File_H BitBoard = 0x8080808080808080
+
+	Rank_1 BitBoard = 0xFF00000000000000
+	Rank_2 BitBoard = 0x00FF000000000000
+	Rank_3 BitBoard = 0x0000FF0000000000
+	Rank_4 BitBoard = 0x000000FF00000000
+	Rank_5 BitBoard = 0x00000000FF000000
+	Rank_6 BitBoard = 0x0000000000FF0000
+	Rank_7 BitBoard = 0x000000000000FF00
+	Rank_8 BitBoard = 0x00000000000000FF
+
+	EmptyBoard BitBoard = 0
+)
+
 func (b BitBoard) String() string {
 	builder := strings.Builder{}
 
@@ -33,6 +55,5 @@ func (b BitBoard) String() string {
 func (b BitBoard) PopLSB() (Square, BitBoard) {
 	s := Square(bits.TrailingZeros64(uint64(b)))
 	b &= b - 1
-	fmt.Printf("%b %b %b\n", int64(b), uint64(-int64(b)), int64(b)&-int64(b))
 	return s, b
 }
