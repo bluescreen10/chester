@@ -31,6 +31,5 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(p)
 	fmt.Printf("Node(depth = %d): %d\n", *depth, Perft(p, *depth, true, os.Stdout))
 }

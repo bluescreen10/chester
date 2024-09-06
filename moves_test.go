@@ -92,33 +92,51 @@ func TestLegalMoves(t *testing.T) {
 }
 
 func TestWhitePawnMoves(t *testing.T) {
-	fen := "r1b1kb1r/1P4P1/1n3n2/2PpP2p/8/pP6/P4P1P/4K3 w - d6 0 1"
-	p, err := pawned.Parse(fen)
-	if err != nil {
-		t.Fatal(err)
+	tests := []struct {
+		fen      string
+		expected []string
+	}{
+		{
+			fen: "r1b1kb1r/1P4P1/1n3n2/2PpP2p/8/pP6/P4P1P/4K3 w - d6 0 1",
+			expected: []string{
+				"b3b4", "b7a8b", "b7a8n", "b7a8q", "b7a8r",
+				"b7b8b", "b7b8n", "b7b8q", "b7b8r", "b7c8b",
+				"b7c8n", "b7c8q", "b7c8r", "c5b6", "c5c6",
+				"c5d6", "e1d1", "e1d2", "e1e2", "e1f1",
+				"e5d6", "e5e6", "e5f6", "f2f3", "f2f4",
+				"g7f8b", "g7f8n", "g7f8q", "g7f8r", "g7g8b",
+				"g7g8n", "g7g8q", "g7g8r", "g7h8b", "g7h8n",
+				"g7h8q", "g7h8r", "h2h3", "h2h4",
+			},
+		},
+		{
+			fen: "r1bqkbnr/pp1ppppp/n7/1Pp5/8/8/P1PPPPPP/RNBQKBNR w KQkq c6 0 3",
+			expected: []string{
+				"a2a3", "a2a4", "b1a3", "b1c3", "b5a6",
+				"b5b6", "b5c6", "c1a3", "c1b2", "c2c3",
+				"c2c4", "d2d3", "d2d4", "e2e3", "e2e4",
+				"f2f3", "f2f4", "g1f3", "g1h3", "g2g3",
+				"g2g4", "h2h3", "h2h4",
+			},
+		},
 	}
 
-	expected := []string{
-		"b3b4", "b7a8b", "b7a8n", "b7a8q", "b7a8r",
-		"b7b8b", "b7b8n", "b7b8q", "b7b8r", "b7c8b",
-		"b7c8n", "b7c8q", "b7c8r", "c5b6", "c5c6",
-		"c5d6", "e1d1", "e1d2", "e1e2", "e1f1",
-		"e5d6", "e5e6", "e5f6", "f2f3", "f2f4",
-		"g7f8b", "g7f8n", "g7f8q", "g7f8r", "g7g8b",
-		"g7g8n", "g7g8q", "g7g8r", "g7h8b", "g7h8n",
-		"g7h8q", "g7h8r", "h2h3", "h2h4",
-	}
+	for _, test := range tests {
+		p, err := pawned.Parse(test.fen)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var moves []pawned.Move
+		var got []string
+		pawned.LegalMoves(&moves, &p)
+		for _, move := range moves {
+			got = append(got, move.String())
+		}
+		slices.Sort(got)
 
-	var moves []pawned.Move
-	var got []string
-	pawned.LegalMoves(&moves, &p)
-	for _, move := range moves {
-		got = append(got, move.String())
-	}
-	slices.Sort(got)
-
-	if !slices.Equal(got, expected) {
-		t.Fatalf("LegalMoves(%s) got(%d) %s, want(%d) %s", fen, len(got), got, len(expected), expected)
+		if !slices.Equal(got, test.expected) {
+			t.Fatalf("LegalMoves(%s) got(%d) %s, want(%d) %s", test.fen, len(got), got, len(test.expected), test.expected)
+		}
 	}
 }
 
@@ -473,6 +491,16 @@ func TestBlackKingMoves(t *testing.T) {
 		{
 			fen:      "r3k2r/p1pBpBpp/p1p1p1p1/N1N1N1N1/8/8/8/4K3 b kq - 0 1",
 			expected: []string{"e8d8", "e8f8"},
+		},
+		{
+			fen: "rnbq1bnr/pppppkpp/8/5p1P/8/1P6/P1PPPPP1/RNBQKBNR b KQ - 0 3",
+			expected: []string{
+				"a7a5", "a7a6", "b7b5", "b7b6", "b8a6",
+				"b8c6", "c7c5", "c7c6", "d7d5", "d7d6",
+				"d8e8", "e7e5", "e7e6", "f5f4", "f7e6",
+				"f7e8", "f7f6", "g7g5", "g7g6", "g8f6",
+				"g8h6", "h7h6",
+			},
 		},
 	}
 

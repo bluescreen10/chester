@@ -160,13 +160,13 @@ func Perft(p Position, depth int, print bool, output io.Writer) int {
 	*moves = (*moves)[:0]
 	LegalMoves(moves, &p)
 	for _, m := range *moves {
-		p.Do(m)
-		newNodes := Perft(p, depth-1, false, output)
+		newPos := p.Do(m)
+		newNodes := Perft(newPos, depth-1, false, output)
 		if print {
 			fmt.Fprintf(output, "%s: %d\n", m, newNodes)
 		}
 		nodes += newNodes
-		p.Undo()
+		//p.Undo()
 	}
 	movesPool.Put(moves)
 	return nodes
@@ -195,16 +195,15 @@ func LegalMoves(moves *[]Move, pos *Position) {
 
 	for i := 0; i < len(*moves); i++ {
 		move := (*moves)[i]
-		//fmt.Println(move)
-		pos.Do(move)
+		newPos := pos.Do(move)
 
-		king := pos.Pieces[us][King]
+		king := newPos.Pieces[us][King]
 
 		var attacks BitBoard
 		if us == White {
-			attacks = blackAttacks(pos)
+			attacks = blackAttacks(&newPos)
 		} else {
-			attacks = whiteAttacks(pos)
+			attacks = whiteAttacks(&newPos)
 		}
 
 		// if in check remove the move from the valid moves
@@ -212,16 +211,15 @@ func LegalMoves(moves *[]Move, pos *Position) {
 			*moves = append((*moves)[:i], (*moves)[i+1:]...)
 			i--
 		}
-		pos.Undo()
+		//pos.Undo()
 	}
 }
 
 func genWhitePawnAttacks(p *Position) BitBoard {
 	pawns := p.Pieces[White][Pawn]
 
-	left := (pawns &^ File_A) >> 7
-	right := (pawns &^ File_H) >> 9
-
+	left := (pawns &^ File_A) >> 9
+	right := (pawns &^ File_H) >> 7
 	return left | right
 }
 
@@ -522,16 +520,16 @@ func genWhiteAttackMoves(moves *[]Move, pawns, enemies BitBoard) {
 
 func genWhiteEnPassantMoves(moves *[]Move, pawns, enPassantFile BitBoard) {
 	pawnsOnRank := pawns & Rank_5
-	left := (pawnsOnRank &^ File_A) >> 7 & enPassantFile
+	left := (pawnsOnRank &^ File_A) >> 9 & enPassantFile
 	if left != 0 {
 		sq, _ := left.PopLSB()
-		*moves = append(*moves, Move{Piece: Pawn, From: sq + 7, To: sq, Type: EnPassant})
+		*moves = append(*moves, Move{Piece: Pawn, From: sq + 9, To: sq, Type: EnPassant})
 	}
 
-	right := (pawnsOnRank &^ File_H) >> 9 & enPassantFile
+	right := (pawnsOnRank &^ File_H) >> 7 & enPassantFile
 	if right != 0 {
-		sq, _ := left.PopLSB()
-		*moves = append(*moves, Move{Piece: Pawn, From: sq + 9, To: sq, Type: EnPassant})
+		sq, _ := right.PopLSB()
+		*moves = append(*moves, Move{Piece: Pawn, From: sq + 7, To: sq, Type: EnPassant})
 	}
 }
 
@@ -629,7 +627,7 @@ func genBlackEnPassantMoves(moves *[]Move, pawns, enPassantFile BitBoard) {
 
 	right := (pawnsOnRank &^ File_H) << 9 & enPassantFile
 	if right != 0 {
-		sq, _ := left.PopLSB()
+		sq, _ := right.PopLSB()
 		*moves = append(*moves, Move{Piece: Pawn, From: sq - 9, To: sq, Type: EnPassant})
 	}
 }
