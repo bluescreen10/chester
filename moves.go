@@ -49,8 +49,20 @@ const (
 
 var rays [direction(8)][Square(64)]BitBoard
 
-var knightMoves [64]BitBoard
-var kingMoves [64]BitBoard
+var knightMoves [Square(64)]BitBoard
+var kingMoves [Square(64)]BitBoard
+var squaresBetween [Square(64)][Square(64)]BitBoard
+
+type config struct {
+	singlePushes        int
+	leftAttacks         int
+	rightAttacks        int
+	startingPlusOneRank BitBoard
+	enPassantRank       BitBoard
+	promotionRank       BitBoard
+}
+
+var pawnConfig [2]config
 
 func init() {
 	// pre-compute rays
@@ -121,6 +133,43 @@ func init() {
 			kingMoves[i] |= 1 << uint8((7-targetRank)*8+targetFile)
 		}
 	}
+
+	// pre-compute squares between
+	for i := Square(0); i < Square(64); i++ {
+		for j := Square(0); j < Square(64); j++ {
+			if i == j {
+				continue
+			}
+
+			r1, f1 := i.RankAndFile()
+			r2, f2 := j.RankAndFile()
+
+			if r1 == r2 || f1 == f2 {
+				squaresBetween[i][j] =
+					(rays[North][i] & rays[South][j]) |
+						(rays[South][i] & rays[North][j]) |
+						(rays[East][i] & rays[West][j]) |
+						(rays[West][i] & rays[East][j])
+			} else if abs(r1-r2) == abs(f1-f2) {
+				squaresBetween[i][j] =
+					(rays[NorthEast][i] & rays[SouthWest][j]) |
+						(rays[SouthWest][i] & rays[NorthEast][j]) |
+						(rays[NorthWest][i] & rays[SouthEast][j]) |
+						(rays[SouthEast][i] & rays[NorthWest][j])
+			}
+		}
+	}
+
+	//pawn config
+	pawnConfig[White] = config{-8, -9, -7, Rank_3, Rank_5, Rank_8}
+	pawnConfig[Black] = config{8, 7, 9, Rank_6, Rank_4, Rank_1}
+}
+
+func abs(num int8) int8 {
+	if num < 0 {
+		return -num
+	}
+	return num
 }
 
 func (m Move) String() string {
@@ -175,110 +224,96 @@ func Perft(p Position, depth int, print bool, output io.Writer) int {
 func LegalMoves(moves *[]Move, pos *Position) {
 	*moves = (*moves)[:0]
 
-	us, _ := pos.SideToMove()
+	us, them := pos.SideToMove()
 
-	if us == White {
-		genWhitePawnMoves(moves, pos)
-		genWhiteKnightMoves(moves, pos)
-		genWhiteBishopMoves(moves, pos)
-		genWhiteRookMoves(moves, pos)
-		genWhiteQueenMoves(moves, pos)
-		genWhiteKingMoves(moves, pos)
+	checkers, _, _ := checkersPinnedAndPinners(pos, us, them)
+
+	if checkers.OnesCount() > 1 {
+		genKingMoves(moves, pos, us, them, false)
+		return
 	} else {
-		genBlackPawnMoves(moves, pos)
-		genBlackKnightMoves(moves, pos)
-		genBlackBishopMoves(moves, pos)
-		genBlackRookMoves(moves, pos)
-		genBlackQueenMoves(moves, pos)
-		genBlackKingMoves(moves, pos)
+		genPawnMoves(moves, pos, us, them)
+		genKnightMoves(moves, pos, us)
+		genBishopMoves(moves, pos, us)
+		genRookMoves(moves, pos, us)
+		genQueenMoves(moves, pos, us)
+		genKingMoves(moves, pos, us, them, true)
 	}
 
 	for i := 0; i < len(*moves); i++ {
 		move := (*moves)[i]
 		newPos := pos.Do(move)
 
-		king := newPos.Pieces[us][King]
-
-		var attacks BitBoard
-		if us == White {
-			attacks = blackAttacks(&newPos)
-		} else {
-			attacks = whiteAttacks(&newPos)
-		}
-
-		// if in check remove the move from the valid moves
-		if king&attacks != 0 {
+		if checkers, _, _ := checkersPinnedAndPinners(&newPos, us, them); checkers.OnesCount() > 0 {
 			*moves = append((*moves)[:i], (*moves)[i+1:]...)
 			i--
 		}
-		//pos.Undo()
 	}
 }
 
-func genWhitePawnAttacks(p *Position) BitBoard {
-	pawns := p.Pieces[White][Pawn]
+func checkersPinnedAndPinners(p *Position, us, them Color) (BitBoard, BitBoard, BitBoard) {
+	//FIXME: implement pinned and pinners
+	king := p.Pieces[us][King]
+	kingSq, _ := king.PopLSB()
 
-	left := (pawns &^ File_A) >> 9
-	right := (pawns &^ File_H) >> 7
-	return left | right
-}
-
-func genBlackPawnAttacks(p *Position) BitBoard {
-	pawns := p.Pieces[Black][Pawn]
-
-	left := (pawns &^ File_A) << 7
-	right := (pawns &^ File_H) << 9
-
-	return left | right
-}
-
-func genWhiteKnightAttacks(p *Position) BitBoard {
-	var attacks BitBoard
-
-	knights := p.Pieces[White][Knight]
-
-	for knights != 0 {
-		var sq Square
-		sq, knights = knights.PopLSB()
-		attacks |= knightMoves[sq]
+	checkers := knightMoves[kingSq] & p.Pieces[them][Knight]
+	if us == White {
+		checkers |= ((king & File_Not_A) >> 9) & p.Pieces[them][Pawn]
+		checkers |= ((king & File_Not_H) >> 7) & p.Pieces[them][Pawn]
+	} else {
+		checkers |= ((king & File_Not_A) << 7) & p.Pieces[them][Pawn]
+		checkers |= ((king & File_Not_H) << 9) & p.Pieces[them][Pawn]
 	}
 
-	return attacks
-}
+	kingDiagonalRays := rays[NorthWest][kingSq] | rays[NorthEast][kingSq] | rays[SouthWest][kingSq] | rays[SouthEast][kingSq]
+	diagonalAttackers := (p.Pieces[them][Queen] | p.Pieces[them][Bishop])
 
-func genBlackKnightAttacks(p *Position) BitBoard {
-	var attacks BitBoard
+	kingStraightRays := rays[North][kingSq] | rays[South][kingSq] | rays[East][kingSq] | rays[West][kingSq]
+	straightAttackers := (p.Pieces[them][Queen] | p.Pieces[them][Rook])
 
-	knights := p.Pieces[Black][Knight]
-
-	for knights != 0 {
-		var sq Square
-		sq, knights = knights.PopLSB()
-		attacks |= knightMoves[sq]
-	}
-
-	return attacks
-}
-
-func genWhiteBishopAttacks(p *Position) BitBoard {
-	var attacks BitBoard
-
-	bishops := p.Pieces[White][Bishop]
+	potentialCheckers := (diagonalAttackers & kingDiagonalRays) | (straightAttackers & kingStraightRays)
 	occupied := p.Occupied
 
-	for bishops != 0 {
+	for potentialCheckers != 0 {
 		var sq Square
-		sq, bishops = bishops.PopLSB()
-		attacks |= genBishopAttacks(sq, occupied)
+		sq, potentialCheckers = potentialCheckers.PopLSB()
+
+		path := squaresBetween[sq][kingSq]
+		if path&occupied == 0 {
+			checkers |= 1 << sq
+		}
+	}
+
+	return checkers, 0, 0
+}
+
+func genPawnsAttacks(p *Position, us Color) BitBoard {
+	pawns := p.Pieces[us][Pawn]
+	config := pawnConfig[us]
+
+	left := (pawns & File_Not_A).RotateLeft(config.leftAttacks)
+	right := (pawns & File_Not_H).RotateLeft(config.rightAttacks)
+	return left | right
+}
+
+func genKnightsAttacks(p *Position, us Color) BitBoard {
+	var attacks BitBoard
+
+	knights := p.Pieces[us][Knight]
+
+	for knights != 0 {
+		var sq Square
+		sq, knights = knights.PopLSB()
+		attacks |= knightMoves[sq]
 	}
 
 	return attacks
 }
 
-func genBlackBishopAttacks(p *Position) BitBoard {
+func genBishopsAttacks(p *Position, us Color) BitBoard {
 	var attacks BitBoard
 
-	bishops := p.Pieces[Black][Bishop]
+	bishops := p.Pieces[us][Bishop]
 	occupied := p.Occupied
 
 	for bishops != 0 {
@@ -325,25 +360,10 @@ func genBishopAttacks(sq Square, occupied BitBoard) BitBoard {
 	return attacks
 }
 
-func genWhiteRookAttacks(p *Position) BitBoard {
+func genRooksAttacks(p *Position, us Color) BitBoard {
 	var attacks BitBoard
 
-	rooks := p.Pieces[White][Rook]
-	occupied := p.Occupied
-
-	for rooks != 0 {
-		var sq Square
-		sq, rooks = rooks.PopLSB()
-		attacks |= genRookAttacks(sq, occupied)
-	}
-
-	return attacks
-}
-
-func genBlackRookAttacks(p *Position) BitBoard {
-	var attacks BitBoard
-
-	rooks := p.Pieces[Black][Rook]
+	rooks := p.Pieces[us][Rook]
 	occupied := p.Occupied
 
 	for rooks != 0 {
@@ -392,10 +412,10 @@ func genRookAttacks(sq Square, occupied BitBoard) BitBoard {
 	return attacks
 }
 
-func genWhiteQueenAttacks(p *Position) BitBoard {
+func genQueensAttacks(p *Position, us Color) BitBoard {
 	var attacks BitBoard
 
-	queens := p.Pieces[White][Queen]
+	queens := p.Pieces[us][Queen]
 	occupied := p.Occupied
 
 	for queens != 0 {
@@ -407,234 +427,121 @@ func genWhiteQueenAttacks(p *Position) BitBoard {
 	return attacks
 }
 
-func genBlackQueenAttacks(p *Position) BitBoard {
-	var attacks BitBoard
-
-	queens := p.Pieces[Black][Queen]
-	occupied := p.Occupied
-
-	for queens != 0 {
-		var sq Square
-		sq, queens = queens.PopLSB()
-		attacks |= genBishopAttacks(sq, occupied) | genRookAttacks(sq, occupied)
-	}
-
-	return attacks
-}
-
-func genWhiteKingAttacks(p *Position) BitBoard {
-	king := p.Pieces[White][King]
+func genKingAttacks(p *Position, us Color) BitBoard {
+	king := p.Pieces[us][King]
 	sq, _ := king.PopLSB()
 	return kingMoves[sq]
 }
 
-func genBlackKingAttacks(p *Position) BitBoard {
-	king := p.Pieces[Black][King]
-	sq, _ := king.PopLSB()
-	return kingMoves[sq]
-}
-
-func genWhitePawnMoves(moves *[]Move, p *Position) {
-	pawns := p.Pieces[White][Pawn]
+func genPawnMoves(moves *[]Move, p *Position, us, them Color) {
+	pawns := p.Pieces[us][Pawn]
 	occupied := p.Occupied
-	enemies := p.AllPieces[Black]
+	enemies := p.AllPieces[them]
 
-	genWhiteForwardMoves(moves, pawns, occupied)
-	genWhiteAttackMoves(moves, pawns, enemies)
+	genForwardMoves(moves, pawns, occupied, us)
+	genAttackMoves(moves, pawns, enemies, us)
 	if p.IsEnPassant() {
-		genWhiteEnPassantMoves(moves, pawns, p.EnPassantFile())
+		genEnPassantMoves(moves, pawns, p.EnPassantFile(), us)
 	}
 }
 
-func genWhiteForwardMoves(moves *[]Move, pawns, occupied BitBoard) {
-	singlePushes := (pawns >> 8) &^ occupied
+func genForwardMoves(moves *[]Move, pawns, occupied BitBoard, us Color) {
+	config := pawnConfig[us]
+
+	singlePushes := pawns.RotateLeft(config.singlePushes) &^ occupied
 
 	// non-promotion moves
-	for pushes := singlePushes &^ Rank_8; pushes != 0; {
+	for pushes := singlePushes &^ config.promotionRank; pushes != 0; {
 		var to Square
 		to, pushes = pushes.PopLSB()
-		*moves = append(*moves, Move{Piece: Pawn, From: to + 8, To: to})
+		*moves = append(*moves, Move{Piece: Pawn, From: to - Square(config.singlePushes), To: to})
 	}
 
 	// promotion
-	for pushes := singlePushes & Rank_8; pushes != 0; {
+	for pushes := singlePushes & config.promotionRank; pushes != 0; {
 		var to Square
 		to, pushes = pushes.PopLSB()
+		from := to - Square(config.singlePushes)
 		*moves = append(*moves,
-			Move{Piece: Pawn, From: to + 8, To: to, Type: PromotionToQueen},
-			Move{Piece: Pawn, From: to + 8, To: to, Type: PromotionToRook},
-			Move{Piece: Pawn, From: to + 8, To: to, Type: PromotionToBishop},
-			Move{Piece: Pawn, From: to + 8, To: to, Type: PromotionToKnight},
+			Move{Piece: Pawn, From: from, To: to, Type: PromotionToQueen},
+			Move{Piece: Pawn, From: from, To: to, Type: PromotionToRook},
+			Move{Piece: Pawn, From: from, To: to, Type: PromotionToBishop},
+			Move{Piece: Pawn, From: from, To: to, Type: PromotionToKnight},
 		)
 	}
 
-	doublePushes := ((singlePushes >> 8) &^ occupied) & Rank_4
+	doublePushes := (singlePushes & config.startingPlusOneRank).RotateLeft(config.singlePushes) &^ occupied
 	for doublePushes != 0 {
 		var to Square
 		to, doublePushes = doublePushes.PopLSB()
-		*moves = append(*moves, Move{Piece: Pawn, From: to + 16, To: to})
+		*moves = append(*moves, Move{Piece: Pawn, From: to - Square(2*config.singlePushes), To: to})
 	}
 }
 
-func genWhiteAttackMoves(moves *[]Move, pawns, enemies BitBoard) {
-	leftAttacks := (pawns &^ File_A) >> 9 & enemies
+func genAttackMoves(moves *[]Move, pawns, enemies BitBoard, us Color) {
+	config := pawnConfig[us]
+	leftAttacks := (pawns &^ File_A).RotateLeft(config.leftAttacks) & enemies
 
 	// non-promotion captures
-	for attacks := leftAttacks &^ Rank_8; attacks != 0; {
+	for attacks := leftAttacks &^ config.promotionRank; attacks != 0; {
 		var to Square
 		to, attacks = attacks.PopLSB()
-		*moves = append(*moves, Move{Piece: Pawn, From: to + 9, To: to})
+		*moves = append(*moves, Move{Piece: Pawn, From: to - Square(config.leftAttacks), To: to})
 	}
 
 	// promotion
-	for attacks := leftAttacks & Rank_8; attacks != 0; {
+	for attacks := leftAttacks & config.promotionRank; attacks != 0; {
 		var to Square
 		to, attacks = attacks.PopLSB()
+		from := to - Square(config.leftAttacks)
 		*moves = append(*moves,
-			Move{Piece: Pawn, From: to + 9, To: to, Type: PromotionToQueen},
-			Move{Piece: Pawn, From: to + 9, To: to, Type: PromotionToRook},
-			Move{Piece: Pawn, From: to + 9, To: to, Type: PromotionToBishop},
-			Move{Piece: Pawn, From: to + 9, To: to, Type: PromotionToKnight},
+			Move{Piece: Pawn, From: from, To: to, Type: PromotionToQueen},
+			Move{Piece: Pawn, From: from, To: to, Type: PromotionToRook},
+			Move{Piece: Pawn, From: from, To: to, Type: PromotionToBishop},
+			Move{Piece: Pawn, From: from, To: to, Type: PromotionToKnight},
 		)
 	}
 
-	rightAttacks := (pawns &^ File_H) >> 7 & enemies
-	for attacks := rightAttacks &^ Rank_8; attacks != 0; {
+	rightAttacks := (pawns &^ File_H).RotateLeft(config.rightAttacks) & enemies
+	for attacks := rightAttacks &^ config.promotionRank; attacks != 0; {
 		var to Square
 		to, attacks = attacks.PopLSB()
-		*moves = append(*moves, Move{Piece: Pawn, From: to + 7, To: to})
+		*moves = append(*moves, Move{Piece: Pawn, From: to - Square(config.rightAttacks), To: to})
 	}
 
 	// promotion
-	for attacks := rightAttacks & Rank_8; attacks != 0; {
+	for attacks := rightAttacks & config.promotionRank; attacks != 0; {
 		var to Square
 		to, attacks = attacks.PopLSB()
+		from := to - Square(config.rightAttacks)
 		*moves = append(*moves,
-			Move{Piece: Pawn, From: to + 7, To: to, Type: PromotionToQueen},
-			Move{Piece: Pawn, From: to + 7, To: to, Type: PromotionToRook},
-			Move{Piece: Pawn, From: to + 7, To: to, Type: PromotionToBishop},
-			Move{Piece: Pawn, From: to + 7, To: to, Type: PromotionToKnight},
+			Move{Piece: Pawn, From: from, To: to, Type: PromotionToQueen},
+			Move{Piece: Pawn, From: from, To: to, Type: PromotionToRook},
+			Move{Piece: Pawn, From: from, To: to, Type: PromotionToBishop},
+			Move{Piece: Pawn, From: from, To: to, Type: PromotionToKnight},
 		)
 	}
 }
 
-func genWhiteEnPassantMoves(moves *[]Move, pawns, enPassantFile BitBoard) {
-	pawnsOnRank := pawns & Rank_5
-	left := (pawnsOnRank &^ File_A) >> 9 & enPassantFile
+func genEnPassantMoves(moves *[]Move, pawns, enPassantFile BitBoard, us Color) {
+	config := pawnConfig[us]
+	pawnsOnRank := pawns & config.enPassantRank
+	left := (pawnsOnRank &^ File_A).RotateLeft(config.leftAttacks) & enPassantFile
 	if left != 0 {
 		sq, _ := left.PopLSB()
-		*moves = append(*moves, Move{Piece: Pawn, From: sq + 9, To: sq, Type: EnPassant})
+		*moves = append(*moves, Move{Piece: Pawn, From: sq - Square(config.leftAttacks), To: sq, Type: EnPassant})
 	}
 
-	right := (pawnsOnRank &^ File_H) >> 7 & enPassantFile
+	right := (pawnsOnRank &^ File_H).RotateLeft(config.rightAttacks) & enPassantFile
 	if right != 0 {
 		sq, _ := right.PopLSB()
-		*moves = append(*moves, Move{Piece: Pawn, From: sq + 7, To: sq, Type: EnPassant})
+		*moves = append(*moves, Move{Piece: Pawn, From: sq - Square(config.rightAttacks), To: sq, Type: EnPassant})
 	}
 }
 
-func genBlackPawnMoves(moves *[]Move, p *Position) {
-	pawns := p.Pieces[Black][Pawn]
-	occupied := p.Occupied
-	enemies := p.AllPieces[White]
-
-	genBlackForwardMoves(moves, pawns, occupied)
-	genBlackAttackMoves(moves, pawns, enemies)
-	if p.IsEnPassant() {
-		genBlackEnPassantMoves(moves, pawns, p.EnPassantFile())
-	}
-}
-
-func genBlackForwardMoves(moves *[]Move, pawns, occupied BitBoard) {
-	singlePushes := (pawns << 8) &^ occupied
-
-	// non-promotion moves
-	for pushes := singlePushes &^ Rank_1; pushes != 0; {
-		var to Square
-		to, pushes = pushes.PopLSB()
-		*moves = append(*moves, Move{Piece: Pawn, From: to - 8, To: to})
-	}
-
-	// promotion
-	for pushes := singlePushes & Rank_1; pushes != 0; {
-		var to Square
-		to, pushes = pushes.PopLSB()
-		*moves = append(*moves,
-			Move{Piece: Pawn, From: to - 8, To: to, Type: PromotionToQueen},
-			Move{Piece: Pawn, From: to - 8, To: to, Type: PromotionToRook},
-			Move{Piece: Pawn, From: to - 8, To: to, Type: PromotionToBishop},
-			Move{Piece: Pawn, From: to - 8, To: to, Type: PromotionToKnight},
-		)
-	}
-
-	doublePushes := ((singlePushes << 8) &^ occupied) & Rank_5
-	for doublePushes != 0 {
-		var to Square
-		to, doublePushes = doublePushes.PopLSB()
-		*moves = append(*moves, Move{Piece: Pawn, From: to - 16, To: to})
-	}
-}
-
-func genBlackAttackMoves(moves *[]Move, pawns, enemies BitBoard) {
-	leftAttacks := (pawns &^ File_A) << 7 & enemies
-
-	// non-promotion captures
-	for attacks := leftAttacks &^ Rank_1; attacks != 0; {
-		var to Square
-		to, attacks = attacks.PopLSB()
-		*moves = append(*moves, Move{Piece: Pawn, From: to - 7, To: to})
-	}
-
-	// promotion
-	for attacks := leftAttacks & Rank_1; attacks != 0; {
-		var to Square
-		to, attacks = attacks.PopLSB()
-		*moves = append(*moves,
-			Move{Piece: Pawn, From: to - 7, To: to, Type: PromotionToQueen},
-			Move{Piece: Pawn, From: to - 7, To: to, Type: PromotionToRook},
-			Move{Piece: Pawn, From: to - 7, To: to, Type: PromotionToBishop},
-			Move{Piece: Pawn, From: to - 7, To: to, Type: PromotionToKnight},
-		)
-	}
-
-	rightAttacks := (pawns &^ File_H) << 9 & enemies
-	for attacks := rightAttacks &^ Rank_1; attacks != 0; {
-		var to Square
-		to, attacks = attacks.PopLSB()
-		*moves = append(*moves, Move{Piece: Pawn, From: to - 9, To: to})
-	}
-
-	// promotion
-	for attacks := rightAttacks & Rank_1; attacks != 0; {
-		var to Square
-		to, attacks = attacks.PopLSB()
-		*moves = append(*moves,
-			Move{Piece: Pawn, From: to - 9, To: to, Type: PromotionToQueen},
-			Move{Piece: Pawn, From: to - 9, To: to, Type: PromotionToRook},
-			Move{Piece: Pawn, From: to - 9, To: to, Type: PromotionToBishop},
-			Move{Piece: Pawn, From: to - 9, To: to, Type: PromotionToKnight},
-		)
-	}
-}
-
-func genBlackEnPassantMoves(moves *[]Move, pawns, enPassantFile BitBoard) {
-	pawnsOnRank := pawns & Rank_4
-	left := (pawnsOnRank &^ File_A) << 7 & enPassantFile
-	if left != 0 {
-		sq, _ := left.PopLSB()
-		*moves = append(*moves, Move{Piece: Pawn, From: sq - 7, To: sq, Type: EnPassant})
-	}
-
-	right := (pawnsOnRank &^ File_H) << 9 & enPassantFile
-	if right != 0 {
-		sq, _ := right.PopLSB()
-		*moves = append(*moves, Move{Piece: Pawn, From: sq - 9, To: sq, Type: EnPassant})
-	}
-}
-
-func genWhiteKnightMoves(moves *[]Move, p *Position) {
-	knights := p.Pieces[White][Knight]
-	enemiesOrEmpty := ^p.AllPieces[White]
+func genKnightMoves(moves *[]Move, p *Position, us Color) {
+	knights := p.Pieces[us][Knight]
+	enemiesOrEmpty := ^p.AllPieces[us]
 
 	for knights != 0 {
 		var from Square
@@ -650,27 +557,9 @@ func genWhiteKnightMoves(moves *[]Move, p *Position) {
 	}
 }
 
-func genBlackKnightMoves(moves *[]Move, p *Position) {
-	knights := p.Pieces[Black][Knight]
-	enemiesOrEmpty := ^p.AllPieces[Black]
-
-	for knights != 0 {
-		var from Square
-		from, knights = knights.PopLSB()
-		targets := knightMoves[from] & enemiesOrEmpty
-
-		for targets != 0 {
-			var to Square
-			to, targets = targets.PopLSB()
-			*moves = append(*moves, Move{Piece: Knight, From: from, To: to})
-		}
-
-	}
-}
-
-func genWhiteBishopMoves(moves *[]Move, p *Position) {
-	bishops := p.Pieces[White][Bishop]
-	enemiesOrEmpty := ^p.AllPieces[White]
+func genBishopMoves(moves *[]Move, p *Position, us Color) {
+	bishops := p.Pieces[us][Bishop]
+	enemiesOrEmpty := ^p.AllPieces[us]
 	occupied := p.Occupied
 
 	for bishops != 0 {
@@ -686,27 +575,9 @@ func genWhiteBishopMoves(moves *[]Move, p *Position) {
 	}
 }
 
-func genBlackBishopMoves(moves *[]Move, p *Position) {
-	bishops := p.Pieces[Black][Bishop]
-	enemiesOrEmpty := ^p.AllPieces[Black]
-	occupied := p.Occupied
-
-	for bishops != 0 {
-		var from Square
-		from, bishops = bishops.PopLSB()
-		targets := genBishopAttacks(from, occupied) & enemiesOrEmpty
-
-		for targets != 0 {
-			var to Square
-			to, targets = targets.PopLSB()
-			*moves = append(*moves, Move{Piece: Bishop, From: from, To: to})
-		}
-	}
-}
-
-func genWhiteRookMoves(moves *[]Move, p *Position) {
-	rooks := p.Pieces[White][Rook]
-	enemiesOrEmpty := ^p.AllPieces[White]
+func genRookMoves(moves *[]Move, p *Position, us Color) {
+	rooks := p.Pieces[us][Rook]
+	enemiesOrEmpty := ^p.AllPieces[us]
 	occupied := p.Occupied
 
 	for rooks != 0 {
@@ -722,27 +593,9 @@ func genWhiteRookMoves(moves *[]Move, p *Position) {
 	}
 }
 
-func genBlackRookMoves(moves *[]Move, p *Position) {
-	rooks := p.Pieces[Black][Rook]
-	enemiesOrEmpty := ^p.AllPieces[Black]
-	occupied := p.Occupied
-
-	for rooks != 0 {
-		var from Square
-		from, rooks = rooks.PopLSB()
-		targets := genRookAttacks(from, occupied) & enemiesOrEmpty
-
-		for targets != 0 {
-			var to Square
-			to, targets = targets.PopLSB()
-			*moves = append(*moves, Move{Piece: Rook, From: from, To: to})
-		}
-	}
-}
-
-func genWhiteQueenMoves(moves *[]Move, p *Position) {
-	queens := p.Pieces[White][Queen]
-	enemiesOrEmpty := ^p.AllPieces[White]
+func genQueenMoves(moves *[]Move, p *Position, us Color) {
+	queens := p.Pieces[us][Queen]
+	enemiesOrEmpty := ^p.AllPieces[us]
 	occupied := p.Occupied
 
 	for queens != 0 {
@@ -758,30 +611,12 @@ func genWhiteQueenMoves(moves *[]Move, p *Position) {
 	}
 }
 
-func genBlackQueenMoves(moves *[]Move, p *Position) {
-	queens := p.Pieces[Black][Queen]
-	enemiesOrEmpty := ^p.AllPieces[Black]
+func genKingMoves(moves *[]Move, p *Position, us, them Color, castling bool) {
+	king := p.Pieces[us][King]
+	enemyKing := p.Pieces[them][King]
+	enemiesOrEmpty := ^p.AllPieces[us]
 	occupied := p.Occupied
-
-	for queens != 0 {
-		var from Square
-		from, queens = queens.PopLSB()
-		targets := (genRookAttacks(from, occupied) | genBishopAttacks(from, occupied)) & enemiesOrEmpty
-
-		for targets != 0 {
-			var to Square
-			to, targets = targets.PopLSB()
-			*moves = append(*moves, Move{Piece: Queen, From: from, To: to})
-		}
-	}
-}
-
-func genWhiteKingMoves(moves *[]Move, p *Position) {
-	king := p.Pieces[White][King]
-	enemyKing := p.Pieces[Black][King]
-	enemiesOrEmpty := ^p.AllPieces[White]
-	occupied := p.Occupied
-	attacked := blackAttacks(p)
+	attacked := attacks(p, them)
 
 	// normal moves
 	from, _ := king.PopLSB()
@@ -793,77 +628,59 @@ func genWhiteKingMoves(moves *[]Move, p *Position) {
 		*moves = append(*moves, Move{Piece: King, From: from, To: to})
 	}
 
-	// castling
-	if p.CanWhiteCastleKingSide() {
-		emptySquares := BitBoard(3) << uint8(SQ_F1)
-		mustNotBeAttacked := BitBoard(7) << uint8(SQ_E1)
-
-		if emptySquares&occupied == 0 && mustNotBeAttacked&attacked == 0 {
-			*moves = append(*moves, Move{Piece: King, Type: Castle, From: SQ_E1, To: SQ_G1})
-		}
-	}
-
-	if p.CanWhiteCastleQueenSide() {
-		emptySquares := BitBoard(7) << uint8(SQ_B1)
-		mustNotBeAttacked := BitBoard(7) << uint8(SQ_C1)
-
-		if emptySquares&occupied == 0 && mustNotBeAttacked&attacked == 0 {
-			*moves = append(*moves, Move{Piece: King, Type: Castle, From: SQ_E1, To: SQ_C1})
-		}
-	}
-}
-
-func genBlackKingMoves(moves *[]Move, p *Position) {
-	king := p.Pieces[Black][King]
-	enemyKing := p.Pieces[White][King]
-	enemiesOrEmpty := ^p.AllPieces[Black]
-	occupied := p.Occupied
-	attacked := whiteAttacks(p)
-
-	// normal moves
-	from, _ := king.PopLSB()
-	targets := kingMoves[from] & enemiesOrEmpty &^ (enemyKing | attacked)
-
-	for targets != 0 {
-		var to Square
-		to, targets = targets.PopLSB()
-		*moves = append(*moves, Move{Piece: King, From: from, To: to})
+	if !castling {
+		return
 	}
 
 	// castling
-	if p.CanBlackCastleKingSide() {
-		emptySquares := BitBoard(3) << uint8(SQ_F8)
-		mustNotBeAttacked := BitBoard(7) << uint8(SQ_E8)
+	if us == White {
+		if p.CanWhiteCastleKingSide() {
+			emptySquares := squaresBetween[SQ_E1][SQ_H1]
+			mustNotBeAttacked := squaresBetween[SQ_D1][SQ_H1]
 
-		if emptySquares&occupied == 0 && mustNotBeAttacked&attacked == 0 {
-			*moves = append(*moves, Move{Piece: King, Type: Castle, From: SQ_E8, To: SQ_G8})
+			if emptySquares&occupied == 0 && mustNotBeAttacked&attacked == 0 {
+				*moves = append(*moves, Move{Piece: King, Type: Castle, From: SQ_E1, To: SQ_G1})
+			}
 		}
-	}
 
-	if p.CanBlackCastleQueenSide() {
-		emptySquares := BitBoard(7) << uint8(SQ_B8)
-		mustNotBeAttacked := BitBoard(7) << uint8(SQ_C8)
+		if p.CanWhiteCastleQueenSide() {
+			emptySquares := squaresBetween[SQ_A1][SQ_E1]
+			mustNotBeAttacked := squaresBetween[SQ_B1][SQ_E1]
 
-		if emptySquares&occupied == 0 && mustNotBeAttacked&attacked == 0 {
-			*moves = append(*moves, Move{Piece: King, Type: Castle, From: SQ_E8, To: SQ_C8})
+			attacked := attacks(p, them)
+
+			if emptySquares&occupied == 0 && mustNotBeAttacked&attacked == 0 {
+				*moves = append(*moves, Move{Piece: King, Type: Castle, From: SQ_E1, To: SQ_C1})
+			}
+		}
+	} else {
+		if p.CanBlackCastleKingSide() {
+			emptySquares := squaresBetween[SQ_E8][SQ_H8]
+			mustNotBeAttacked := squaresBetween[SQ_D8][SQ_H8]
+
+			if emptySquares&occupied == 0 && mustNotBeAttacked&attacked == 0 {
+				*moves = append(*moves, Move{Piece: King, Type: Castle, From: SQ_E8, To: SQ_G8})
+			}
+		}
+
+		if p.CanBlackCastleQueenSide() {
+			emptySquares := squaresBetween[SQ_A8][SQ_E8]
+			mustNotBeAttacked := squaresBetween[SQ_B8][SQ_E8]
+
+			attacked := attacks(p, them)
+
+			if emptySquares&occupied == 0 && mustNotBeAttacked&attacked == 0 {
+				*moves = append(*moves, Move{Piece: King, Type: Castle, From: SQ_E8, To: SQ_C8})
+			}
 		}
 	}
 }
 
-func blackAttacks(p *Position) BitBoard {
-	return genBlackPawnAttacks(p) |
-		genBlackKnightAttacks(p) |
-		genBlackBishopAttacks(p) |
-		genBlackRookAttacks(p) |
-		genBlackQueenAttacks(p) |
-		genBlackKingAttacks(p)
-}
-
-func whiteAttacks(p *Position) BitBoard {
-	return genWhitePawnAttacks(p) |
-		genWhiteKnightAttacks(p) |
-		genWhiteBishopAttacks(p) |
-		genWhiteRookAttacks(p) |
-		genWhiteQueenAttacks(p) |
-		genWhiteKingAttacks(p)
+func attacks(p *Position, us Color) BitBoard {
+	return genPawnsAttacks(p, us) |
+		genKnightsAttacks(p, us) |
+		genBishopsAttacks(p, us) |
+		genRooksAttacks(p, us) |
+		genQueensAttacks(p, us) |
+		genKingAttacks(p, us)
 }

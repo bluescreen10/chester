@@ -27,6 +27,9 @@ const (
 	Rank_7 BitBoard = 0x000000000000FF00
 	Rank_8 BitBoard = 0x00000000000000FF
 
+	File_Not_A BitBoard = ^File_A
+	File_Not_H BitBoard = ^File_B
+
 	EmptyBoard BitBoard = 0
 )
 
@@ -56,4 +59,12 @@ func (b BitBoard) PopLSB() (Square, BitBoard) {
 	s := Square(bits.TrailingZeros64(uint64(b)))
 	b &= b - 1
 	return s, b
+}
+
+func (b BitBoard) OnesCount() int8 {
+	return int8(bits.OnesCount64(uint64(b)))
+}
+
+func (b BitBoard) RotateLeft(offset int) BitBoard {
+	return BitBoard(bits.RotateLeft64(uint64(b), offset))
 }
