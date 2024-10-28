@@ -18,7 +18,7 @@ import (
 )
 
 func TestCompareToStockfish(t *testing.T) {
-	depth := 6
+	depth := 8
 
 	// Launch stockfish
 	stockfish := exec.Command("stockfish")

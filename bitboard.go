@@ -28,9 +28,10 @@ const (
 	Rank_8 BitBoard = 0x00000000000000FF
 
 	File_Not_A BitBoard = ^File_A
-	File_Not_H BitBoard = ^File_B
+	File_Not_H BitBoard = ^File_H
 
 	EmptyBoard BitBoard = 0
+	FullBoard  BitBoard = 0xFFFFFFFFFFFFFFFF
 )
 
 func (b BitBoard) String() string {
