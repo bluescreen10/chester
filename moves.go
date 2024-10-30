@@ -33,27 +33,6 @@ type Move struct {
 	From, To Square
 }
 
-type direction uint8
-
-const (
-	North direction = iota
-	East
-	South
-	West
-
-	NorthEast
-	SouthEast
-	SouthWest
-	NorthWest
-)
-
-var rays [direction(8)][Square(64)]BitBoard
-
-var knightMoves [Square(64)]BitBoard
-var kingMoves [Square(64)]BitBoard
-var squaresBetween [Square(64)][Square(64)]BitBoard
-var lineBetween [Square(64)][Square(64)]BitBoard
-
 type config struct {
 	singlePushes     int
 	leftAttacks      int
@@ -63,150 +42,9 @@ type config struct {
 	promotionRank    BitBoard
 }
 
-var pawnConfig [2]config
-
-func init() {
-	// pre-compute rays
-	for i := 0; i < 64; i++ {
-		r, f := 7-i/8, i%8
-
-		for j := 1; j < 8; j++ {
-			if r-j >= 0 && f-j >= 0 {
-				rays[SouthWest][i] |= 1 << uint8((7-r+j)*8+f-j)
-			}
-			if r-j >= 0 && f+j < 8 {
-				rays[SouthEast][i] |= 1 << uint8((7-r+j)*8+f+j)
-			}
-			if r+j < 8 && f-j >= 0 {
-				rays[NorthWest][i] |= 1 << uint8((7-r-j)*8+f-j)
-			}
-			if r+j < 8 && f+j < 8 {
-				rays[NorthEast][i] |= 1 << uint8((7-r-j)*8+f+j)
-			}
-		}
-	}
-
-	for i := 0; i < 64; i++ {
-		r, f := 7-i/8, i%8
-
-		for j := 1; j < 8; j++ {
-			if r-j >= 0 {
-				rays[South][i] |= 1 << uint8((7-r+j)*8+f)
-			}
-			if r+j < 8 {
-				rays[North][i] |= 1 << uint8((7-r-j)*8+f)
-			}
-			if f-j >= 0 {
-				rays[West][i] |= 1 << uint8((7-r)*8+f-j)
-			}
-			if f+j < 8 {
-				rays[East][i] |= 1 << uint8((7-r)*8+f+j)
-			}
-		}
-	}
-
-	// pre-compute knight moves
-	for i := int8(0); i < 64; i++ {
-		rank, file := 7-i/8, i%8
-		moves := [][]int8{{2, 1}, {1, 2}, {-1, 2}, {-2, 1}, {-2, -1}, {-1, -2}, {1, -2}, {2, -1}}
-
-		for _, offsets := range moves {
-			targetRank, targetFile := rank+offsets[0], file+offsets[1]
-			if targetRank < 0 || targetRank > 7 || targetFile < 0 || targetFile > 7 {
-				continue
-			}
-
-			knightMoves[i] |= 1 << uint8((7-targetRank)*8+targetFile)
-		}
-	}
-
-	// pre-compute king moves
-	for i := int8(0); i < 64; i++ {
-		rank, file := 7-i/8, i%8
-		moves := [][]int8{{1, 0}, {1, 1}, {0, 1}, {-1, 1}, {-1, 0}, {-1, -1}, {0, -1}, {1, -1}}
-
-		for _, offsets := range moves {
-			targetRank, targetFile := rank+offsets[0], file+offsets[1]
-			if targetRank < 0 || targetRank > 7 || targetFile < 0 || targetFile > 7 {
-				continue
-			}
-
-			kingMoves[i] |= 1 << uint8((7-targetRank)*8+targetFile)
-		}
-	}
-
-	// pre-compute squares between
-	for i := Square(0); i < Square(64); i++ {
-		for j := Square(0); j < Square(64); j++ {
-			if i == j {
-				continue
-			}
-
-			r1, f1 := i.RankAndFile()
-			r2, f2 := j.RankAndFile()
-
-			if r1 == r2 || f1 == f2 {
-				squaresBetween[i][j] =
-					(rays[North][i] & rays[South][j]) |
-						(rays[South][i] & rays[North][j]) |
-						(rays[East][i] & rays[West][j]) |
-						(rays[West][i] & rays[East][j])
-			} else if abs(r1-r2) == abs(f1-f2) {
-				squaresBetween[i][j] =
-					(rays[NorthEast][i] & rays[SouthWest][j]) |
-						(rays[SouthWest][i] & rays[NorthEast][j]) |
-						(rays[NorthWest][i] & rays[SouthEast][j]) |
-						(rays[SouthEast][i] & rays[NorthWest][j])
-			}
-		}
-	}
-
-	// pre-compute line between
-	for i := Square(0); i < Square(64); i++ {
-		for j := Square(0); j < Square(64); j++ {
-			if i == j {
-				continue
-			}
-
-			r1, f1 := i.RankAndFile()
-			r2, f2 := j.RankAndFile()
-
-			if r1 == r2 {
-				if f1 < f2 {
-					lineBetween[i][j] = rays[East][i]
-				} else {
-					lineBetween[i][j] = rays[West][i]
-				}
-			} else if f1 == f2 {
-				if r1 < r2 {
-					lineBetween[i][j] = rays[North][i]
-				} else {
-					lineBetween[i][j] = rays[South][i]
-				}
-			} else if abs(r1-r2) == abs(f1-f2) {
-				if r1 < r2 && f1 < f2 {
-					lineBetween[i][j] = rays[NorthEast][i]
-				} else if r1 < r2 && f1 > f2 {
-					lineBetween[i][j] = rays[NorthWest][i]
-				} else if r1 > r2 && f1 < f2 {
-					lineBetween[i][j] = rays[SouthEast][i]
-				} else {
-					lineBetween[i][j] = rays[SouthWest][i]
-				}
-			}
-		}
-	}
-
-	//pawn config
-	pawnConfig[White] = config{-8, -9, -7, Rank_3, Rank_5, Rank_8}
-	pawnConfig[Black] = config{8, 7, 9, Rank_6, Rank_4, Rank_1}
-}
-
-func abs(num int8) int8 {
-	if num < 0 {
-		return -num
-	}
-	return num
+var pawnConfig [2]config = [2]config{
+	{-8, -9, -7, Rank_3, Rank_5, Rank_8},
+	{8, 7, 9, Rank_6, Rank_4, Rank_1},
 }
 
 func (m Move) String() string {
@@ -512,7 +350,7 @@ func genForwardMoves(moves *[]Move, pawns, occupied BitBoard, us Color, moveMask
 		var to Square
 		to, pushes = pushes.PopLSB()
 		from := to - Square(config.singlePushes)
-		if lineBetween[kingSq][from]&lineBetween[kingSq][to] != 0 {
+		if lineFromTo[kingSq][from]&lineFromTo[kingSq][to] != 0 {
 			*moves = append(*moves, Move{Piece: Pawn, From: from, To: to})
 		}
 	}
@@ -522,7 +360,7 @@ func genForwardMoves(moves *[]Move, pawns, occupied BitBoard, us Color, moveMask
 		var to Square
 		to, doublePushes = doublePushes.PopLSB()
 		from := to - Square(2*config.singlePushes)
-		if lineBetween[kingSq][from]&lineBetween[kingSq][to] != 0 {
+		if lineFromTo[kingSq][from]&lineFromTo[kingSq][to] != 0 {
 			*moves = append(*moves, Move{Piece: Pawn, From: from, To: to})
 		}
 	}
@@ -562,7 +400,7 @@ func genAttackMoves(moves *[]Move, pawns, enemies BitBoard, us Color, moveMask, 
 		var to Square
 		to, attacks = attacks.PopLSB()
 		from := to - Square(config.leftAttacks)
-		if lineBetween[kingSq][from]&lineBetween[kingSq][to] == 0 {
+		if lineFromTo[kingSq][from]&lineFromTo[kingSq][to] == 0 {
 			continue
 		}
 
@@ -602,7 +440,7 @@ func genAttackMoves(moves *[]Move, pawns, enemies BitBoard, us Color, moveMask, 
 		var to Square
 		to, attacks = attacks.PopLSB()
 		from := to - Square(config.rightAttacks)
-		if lineBetween[kingSq][from]&lineBetween[kingSq][to] == 0 {
+		if lineFromTo[kingSq][from]&lineFromTo[kingSq][to] == 0 {
 			continue
 		}
 
@@ -642,7 +480,7 @@ func genEnPassantMoves(moves *[]Move, pawns, occupied, enPassantFile BitBoard, u
 	left := (pawnsOnRank &^ File_A).RotateLeft(config.leftAttacks) & enPassantFile & moveMask
 	if left&^pinned != 0 {
 		sq, _ := left.PopLSB()
-		path := lineBetween[kingSq][sq-Square(config.leftAttacks)]
+		path := lineFromTo[kingSq][sq-Square(config.leftAttacks)]
 
 		occupiedWithoutPawns := occupied &^ (1 << (sq - Square(config.leftAttacks))) &^ (1 << sq)
 		inCheck := false
@@ -662,7 +500,7 @@ func genEnPassantMoves(moves *[]Move, pawns, occupied, enPassantFile BitBoard, u
 	right := (pawnsOnRank &^ File_H).RotateLeft(config.rightAttacks) & enPassantFile & moveMask
 	if right&^pinned != 0 {
 		sq, _ := right.PopLSB()
-		path := lineBetween[kingSq][sq-Square(config.rightAttacks)]
+		path := lineFromTo[kingSq][sq-Square(config.rightAttacks)]
 		occupiedWithoutPawns := occupied &^ (1 << (sq - Square(config.rightAttacks))) &^ (1 << sq)
 		inCheck := false
 		for potentialCheckers := enemyQueenOrRooks & path; potentialCheckers != 0; {
@@ -706,7 +544,7 @@ func genBishopMoves(moves *[]Move, p *Position, us Color, moveMask, pinned BitBo
 		var from Square
 		from, b = b.PopLSB()
 		kingSq, _ := p.Pieces[us][King].PopLSB()
-		rayMask := lineBetween[kingSq][from]
+		rayMask := lineFromTo[kingSq][from]
 		targets := genBishopAttacks(from, occupied) & enemiesOrEmpty & moveMask & rayMask
 
 		for targets != 0 {
@@ -738,7 +576,7 @@ func genRookMoves(moves *[]Move, p *Position, us Color, moveMask, pinned BitBoar
 		var from Square
 		from, r = r.PopLSB()
 		kingSq, _ := p.Pieces[us][King].PopLSB()
-		rayMask := lineBetween[kingSq][from]
+		rayMask := lineFromTo[kingSq][from]
 		targets := genRookAttacks(from, occupied) & enemiesOrEmpty & moveMask & rayMask
 
 		for targets != 0 {
@@ -770,7 +608,7 @@ func genQueenMoves(moves *[]Move, p *Position, us Color, moveMask, pinned BitBoa
 		var from Square
 		from, q = q.PopLSB()
 		kingSq, _ := p.Pieces[us][King].PopLSB()
-		raysMask := lineBetween[kingSq][from]
+		raysMask := lineFromTo[kingSq][from]
 		targets := (genRookAttacks(from, occupied) | genBishopAttacks(from, occupied)) & enemiesOrEmpty & moveMask & raysMask
 
 		for targets != 0 {
