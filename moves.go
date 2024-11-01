@@ -97,8 +97,6 @@ func Perft(p Position, depth int, print bool, output io.Writer) int {
 }
 
 func LegalMoves(moves *[]Move, pos *Position) {
-	*moves = (*moves)[:0]
-
 	us, them := pos.SideToMove()
 
 	checkers, pinned := checkersAndPinned(pos, us, them)
@@ -133,16 +131,6 @@ func LegalMoves(moves *[]Move, pos *Position) {
 		genQueenMoves(moves, pos, us, FullBoard, pinned)
 		genKingMoves(moves, pos, us, them, true)
 	}
-
-	// for i := 0; i < len(*moves); i++ {
-	// 	move := (*moves)[i]
-	// 	newPos := pos.Do(move)
-
-	// 	if checkers, _, _ := checkersPinnedAndPinners(&newPos, us, them); checkers.OnesCount() > 0 {
-	// 		*moves = append((*moves)[:i], (*moves)[i+1:]...)
-	// 		i--
-	// 	}
-	// }
 }
 
 func checkersAndPinned(p *Position, us, them Color) (BitBoard, BitBoard) {

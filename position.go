@@ -373,9 +373,9 @@ func (p *Position) CanBlackCastleQueenSide() bool {
 	return p.CastlingRights&BlackQueenSideCastle != 0
 }
 
-func (p Position) Do(m Move) Position {
+func (p *Position) Do(m Move) Position {
 
-	new := p
+	new := *p
 
 	us, them := new.SideToMove()
 	new.removeAll(them, m.To)
@@ -469,6 +469,8 @@ func (p Position) Do(m Move) Position {
 
 	return new
 }
+
+//func (p *Position) Undo () {}
 
 func (p *Position) put(piece Piece, color Color, sq Square) {
 	bit := BitBoard(1) << sq
