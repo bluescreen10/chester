@@ -76,23 +76,26 @@ var movesPool = sync.Pool{
 }
 
 func Perft(p Position, depth int, print bool, output io.Writer) int {
-	if depth == 0 {
-		return 1
-	}
 	var nodes int
 	moves := movesPool.Get().(*[]Move)
+	defer movesPool.Put(moves)
 	*moves = (*moves)[:0]
 	LegalMoves(moves, &p)
+
+	if depth == 1 {
+		return len(*moves)
+	}
+
 	for _, m := range *moves {
 		newPos := p.Do(m)
-		newNodes := Perft(newPos, depth-1, false, output)
+		newNodes := Perft(newPos, depth-1, false, nil)
 		if print {
 			fmt.Fprintf(output, "%s: %d\n", m, newNodes)
 		}
 		nodes += newNodes
 		//p.Undo()
 	}
-	movesPool.Put(moves)
+	//movesPool.Put(moves)
 	return nodes
 }
 
@@ -101,15 +104,12 @@ func LegalMoves(moves *[]Move, pos *Position) {
 
 	checkers, pinned := checkersAndPinned(pos, us, them)
 
-	pushMask := ^pos.Occupied
-	captureMask := pos.AllPieces[them]
-
 	switch c := checkers.OnesCount(); {
 	case c >= 2:
 		genKingMoves(moves, pos, us, them, false)
 	case c == 1:
-		captureMask = checkers
-		pushMask = EmptyBoard
+		captureMask := checkers
+		pushMask := EmptyBoard
 		kingSq, _ := pos.Pieces[us][King].PopLSB()
 
 		if (pos.Pieces[them][Bishop]|pos.Pieces[them][Rook]|pos.Pieces[them][Queen])&checkers != 0 {
