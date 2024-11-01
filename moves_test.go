@@ -32,10 +32,6 @@ func TestMoveGen(t *testing.T) {
 			t.Fatalf("Perft(%d) = %d, want %d", test.depth, got, test.nodes)
 		}
 	}
-
-	// depth := 5
-	// fmt.Printf("Node(depth = %d): %d\n", depth, perft(p, depth, true))
-	t.Fatal("not implemented")
 }
 
 func TestLegalMoves(t *testing.T) {
