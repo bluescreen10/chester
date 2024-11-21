@@ -8,6 +8,10 @@ func (s Square) RankAndFile() (int8, int8) {
 	return 7 - int8(s/8), int8(s % 8)
 }
 
+func (s Square) File() int8 {
+	return int8(s % 8)
+}
+
 func SquareFromRankAndFile(rank, file int8) Square {
 	return Square((7-rank)*8 + file)
 }

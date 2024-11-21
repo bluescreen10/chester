@@ -70,7 +70,7 @@ func (m Move) String() string {
 
 var movesPool = sync.Pool{
 	New: func() any {
-		s := make([]Move, 0, maxMoves)
+		var s []Move
 		return &s
 	},
 }
@@ -334,7 +334,7 @@ func genForwardMoves(moves *[]Move, cfg config, pawns, occupied BitBoard, moveMa
 		var to Square
 		to, pushes = pushes.PopLSB()
 		from := to - Square(cfg.singlePushes)
-		if lineFromTo[kingSq][from]&lineFromTo[kingSq][to] != 0 {
+		if kingSq.File() == from.File() {
 			*moves = append(*moves, Move{Piece: Pawn, From: from, To: to})
 		}
 	}
@@ -344,7 +344,7 @@ func genForwardMoves(moves *[]Move, cfg config, pawns, occupied BitBoard, moveMa
 		var to Square
 		to, doublePushes = doublePushes.PopLSB()
 		from := to - Square(2*cfg.singlePushes)
-		if lineFromTo[kingSq][from]&lineFromTo[kingSq][to] != 0 {
+		if kingSq.File() == from.File() {
 			*moves = append(*moves, Move{Piece: Pawn, From: from, To: to})
 		}
 	}
@@ -383,7 +383,7 @@ func genAttackMoves(moves *[]Move, cfg config, pawns, enemies BitBoard, moveMask
 		var to Square
 		to, attacks = attacks.PopLSB()
 		from := to - Square(cfg.leftAttacks)
-		if lineFromTo[kingSq][from]&lineFromTo[kingSq][to] == 0 {
+		if kingSq.File() == from.File() {
 			continue
 		}
 
@@ -423,7 +423,7 @@ func genAttackMoves(moves *[]Move, cfg config, pawns, enemies BitBoard, moveMask
 		var to Square
 		to, attacks = attacks.PopLSB()
 		from := to - Square(cfg.rightAttacks)
-		if lineFromTo[kingSq][from]&lineFromTo[kingSq][to] == 0 {
+		if kingSq.File() == from.File() {
 			continue
 		}
 
