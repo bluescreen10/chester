@@ -6,6 +6,8 @@ import (
 	"go/format"
 	"io"
 	"log"
+	"math/bits"
+	"math/rand"
 	"os"
 )
 
@@ -27,6 +29,13 @@ const (
 	NorthWest
 )
 
+const (
+	Rank_1 uint64 = 0xFF00000000000000
+	Rank_8 uint64 = 0x00000000000000FF
+	File_A uint64 = 0x0101010101010101
+	File_H uint64 = 0x8080808080808080
+)
+
 func main() {
 	buf := new(bytes.Buffer)
 
@@ -38,6 +47,8 @@ func main() {
 	generateLineFromTo(buf)
 	generateFileRankMasks(buf)
 	generateSquares(buf)
+	genEnPassantNeighbours(buf)
+	genMagicnumbers(buf)
 
 	src, err := format.Source(buf.Bytes())
 	if err != nil {
@@ -313,6 +324,28 @@ func generateFileRankMasks(w io.Writer) {
 	fmt.Fprintf(w, ")\n")
 }
 
+func genEnPassantNeighbours(w io.Writer) {
+	fmt.Fprintf(w, "var enPassantNeighbours [Square(64)]BitBoard = [Square(64)]BitBoard{\n")
+	for i := range 64 {
+		if i < 23 || i > 40 {
+			fmt.Fprintf(w, "\t0,\n")
+		} else {
+			mask := uint64(1 << i)
+			_, f := sqaureToRankAndFile(i)
+
+			if f != 0 {
+				mask |= uint64(1<<i - 1)
+			}
+
+			if f != 7 {
+				mask |= uint64(1<<i + 1)
+			}
+			fmt.Fprintf(w, "\t%d,\n", mask)
+		}
+	}
+	fmt.Fprintf(w, "}\n")
+}
+
 func generateSquares(w io.Writer) {
 	fmt.Fprintf(w, "const (\n")
 	for i := range 64 {
@@ -331,9 +364,252 @@ func sqaureToRankAndFile(i int) (int, int) {
 	return 7 - i/8, i % 8
 }
 
+func genMagicnumbers(w io.Writer) {
+
+	fmt.Fprintf(w, "type Magic struct {\n")
+	fmt.Fprintf(w, " \tMagic BitBoard\n")
+	fmt.Fprintf(w, " \tMask BitBoard\n")
+	fmt.Fprintf(w, " \tShift uint8\n")
+	fmt.Fprintf(w, " \tAttacks []BitBoard\n")
+	fmt.Fprintf(w, "}\n")
+
+	rays := calculateRays()
+
+	fmt.Fprintf(w, "var RookMagic [64]Magic = [64]Magic{")
+	for sq := range 64 {
+		rank, file := sqaureToRankAndFile(sq)
+		mask := (rays[North][sq] | rays[South][sq] | rays[East][sq] | rays[West][sq])
+
+		if rank != 0 {
+			mask &= ^Rank_1
+		}
+		if rank != 7 {
+			mask &= ^Rank_8
+		}
+		if file != 0 {
+			mask &= ^File_A
+		}
+		if file != 7 {
+			mask &= ^File_H
+		}
+		attackFunc := func(sq int, occupied uint64) uint64 {
+			return rookAttacks(sq, occupied, rays)
+		}
+		rookBits := RookBits[sq]
+		magic, attacks := findMagicNumber(sq, rookBits, mask, attackFunc)
+		fmt.Fprintf(w, " \n{%d, %d, %d, []BitBoard{\n", magic, mask, 64-rookBits)
+		for i := range attacks {
+			fmt.Fprintf(w, "\t\t%d,\n", attacks[i])
+		}
+		fmt.Fprintf(w, "}},\n")
+	}
+	fmt.Fprintf(w, "};\n")
+
+	fmt.Fprintf(w, "var BishopMagic [64]Magic = [64]Magic{")
+	for sq := range 64 {
+		rank, file := sqaureToRankAndFile(sq)
+		mask := (rays[NorthEast][sq] | rays[SouthEast][sq] | rays[SouthWest][sq] | rays[NorthWest][sq])
+
+		if rank != 0 {
+			mask &= ^Rank_1
+		}
+		if rank != 7 {
+			mask &= ^Rank_8
+		}
+		if file != 0 {
+			mask &= ^File_A
+		}
+		if file != 7 {
+			mask &= ^File_H
+		}
+
+		attackFunc := func(sq int, occupied uint64) uint64 {
+			return bishopAttacks(sq, occupied, rays)
+		}
+		bishopBits := BishopBits[sq]
+		magic, attacks := findMagicNumber(sq, bishopBits, mask, attackFunc)
+		fmt.Fprintf(w, " \n{%d, %d, %d, []BitBoard{\n", magic, mask, 64-bishopBits)
+		for i := range attacks {
+			fmt.Fprintf(w, "\t\t%d,\n", attacks[i])
+		}
+		fmt.Fprintf(w, "}},\n")
+	}
+	fmt.Fprintf(w, "};\n")
+}
+
+func findMagicNumber(sq, m int, mask uint64, attackFunc func(int, uint64) uint64) (uint64, []uint64) {
+	//mask := RookMask(sq)
+	n := bits.OnesCount64(mask)
+
+	blockers := make([]uint64, 1<<n)
+	attacks := make([]uint64, 1<<n)
+	used := make([]uint64, 4096)
+
+	// generate all possible blocker sets
+	for i := range 1 << n {
+		blockers[i] = setBitsFromIndexInMask(i, n, mask)
+		attacks[i] = attackFunc(sq, blockers[i])
+		//fmt.Println(PrintBitboard(blockers[i]))
+		//fmt.Println(PrintBitboard(attacks[i]))
+	}
+
+	for range 100_000_000 {
+		magic := random()
+
+		// to few bytes set
+		if bits.OnesCount64((mask*magic)&0xFF00000000000000) < 6 {
+			continue
+		}
+
+		// clean up used
+		for i := range 4096 {
+			used[i] = 0
+		}
+
+		var fail bool
+		for i := range 1 << n {
+			h := hash(blockers[i], magic, m)
+			if used[h] == 0 {
+				used[h] = attacks[i]
+			} else if used[h] != attacks[i] {
+				//collision detected
+				fail = true
+				break
+			}
+		}
+
+		if !fail {
+			return magic, used
+		}
+	}
+
+	panic("Error generatic magic number")
+}
+
+func setBitsFromIndexInMask(index int, bitCount int, mask uint64) uint64 {
+	var result uint64
+
+	for i := range bitCount {
+		lsb := bits.TrailingZeros64(mask)
+		mask &= (mask - 1)
+
+		if index&(1<<i) != 0 {
+			result |= (1 << lsb)
+		}
+	}
+	return result
+}
+
+func rookAttacks(sq int, occupied uint64, rays [8][64]uint64) uint64 {
+	attacks := rays[North][sq]
+	if intersect := rays[North][sq] & occupied; intersect != 0 {
+		index := bits.LeadingZeros64(uint64(intersect))
+		attacks &^= rays[North][63-index]
+	}
+
+	attacks |= rays[South][sq]
+	if intersect := rays[South][sq] & occupied; intersect != 0 {
+		index := bits.TrailingZeros64(uint64(intersect))
+		attacks &^= rays[South][index]
+	}
+
+	attacks |= rays[East][sq]
+	if intersect := rays[East][sq] & occupied; intersect != 0 {
+		index := bits.TrailingZeros64(uint64(intersect))
+		attacks &^= rays[East][index]
+	}
+
+	attacks |= rays[West][sq]
+	if intersect := rays[West][sq] & occupied; intersect != 0 {
+		index := bits.LeadingZeros64(uint64(intersect))
+		attacks &^= rays[West][63-index]
+	}
+	return attacks
+}
+
+func bishopAttacks(sq int, occupied uint64, rays [8][64]uint64) uint64 {
+	attacks := rays[NorthWest][sq]
+	if intersect := rays[NorthWest][sq] & occupied; intersect != 0 {
+		index := bits.LeadingZeros64(uint64(intersect))
+		attacks &^= rays[NorthWest][63-index]
+	}
+
+	attacks |= rays[NorthEast][sq]
+	if intersect := rays[NorthEast][sq] & occupied; intersect != 0 {
+		index := bits.LeadingZeros64(uint64(intersect))
+		attacks &^= rays[NorthEast][63-index]
+	}
+
+	attacks |= rays[SouthWest][sq]
+	if intersect := rays[SouthWest][sq] & occupied; intersect != 0 {
+		index := bits.TrailingZeros64(uint64(intersect))
+		attacks &^= rays[SouthWest][index]
+	}
+
+	attacks |= rays[SouthEast][sq]
+	if intersect := rays[SouthEast][sq] & occupied; intersect != 0 {
+		index := bits.TrailingZeros64(uint64(intersect))
+		attacks &^= rays[SouthEast][index]
+	}
+	return attacks
+}
+
+func hash(b, magic uint64, bits int) int {
+	return int((b * magic) >> (64 - bits))
+}
+
+var RookBits = [64]int{
+	12, 11, 11, 11, 11, 11, 11, 12, //a8-h8
+	11, 10, 10, 10, 10, 10, 10, 11, //a7-h7
+	11, 10, 10, 10, 10, 10, 10, 11, //a6-h6
+	11, 10, 10, 10, 10, 10, 10, 11, //a5-h5
+	11, 10, 10, 10, 10, 10, 10, 11, //a4-h4
+	11, 10, 10, 10, 10, 10, 10, 11, //a3-h3
+	11, 10, 10, 10, 10, 10, 10, 11, //a2-h2
+	12, 11, 11, 11, 11, 11, 11, 12, //a1-h1
+}
+
+var BishopBits = [64]int{
+	6, 5, 5, 5, 5, 5, 5, 6, //a8-h8
+	5, 5, 5, 5, 5, 5, 5, 5, //a7-h7
+	5, 5, 7, 7, 7, 7, 5, 5, //a6-h6
+	5, 5, 7, 9, 9, 7, 5, 5, //a5-h5
+	5, 5, 7, 9, 9, 7, 5, 5, //a4-h4
+	5, 5, 7, 7, 7, 7, 5, 5, //a3-h3
+	5, 5, 5, 5, 5, 5, 5, 5, //a2-h2
+	6, 5, 5, 5, 5, 5, 5, 6, //a1-h1
+}
+
+func random() uint64 {
+	return uint64(rand.Int63() & rand.Int63() & rand.Int63())
+}
+
 func abs(x int) int {
 	if x < 0 {
 		return -x
 	}
 	return x
 }
+
+// for deubgging
+// func printBitboard(b uint64) string {
+// 	builder := strings.Builder{}
+
+// 	builder.WriteString("+---+---+---+---+---+---+---+---+\n")
+// 	bit := uint64(1)
+// 	for r := 7; r >= 0; r-- {
+// 		builder.WriteString("|")
+// 		for f := 0; f < 8; f++ {
+// 			if b&bit != 0 {
+// 				builder.WriteString(" X |")
+// 			} else {
+// 				builder.WriteString("   |")
+// 			}
+// 			bit <<= 1
+// 		}
+// 		builder.WriteString(fmt.Sprintf(" %d \n", r+1))
+// 		builder.WriteString("+---+---+---+---+---+---+---+---+\n")
+// 	}
+// 	builder.WriteString("  a   b   c   d   e   f   g   h\n")
+// 	return builder.String()
+// }

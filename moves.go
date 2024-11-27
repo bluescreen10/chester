@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"io"
-	"math/bits"
 	"sync"
 )
 
@@ -75,7 +74,27 @@ var movesPool = sync.Pool{
 	},
 }
 
-func Perft(p Position, depth int, print bool, output io.Writer) int {
+func Perft(p Position, depth int, output io.Writer) int {
+	var nodes int
+	moves := movesPool.Get().(*[]Move)
+	defer movesPool.Put(moves)
+	*moves = (*moves)[:0]
+	LegalMoves(moves, &p)
+
+	for _, m := range *moves {
+		newPos := p.Do(m)
+		newNodes := perft(newPos, depth-1)
+		fmt.Fprintf(output, "%s: %d\n", m, newNodes)
+		nodes += newNodes
+	}
+	return nodes
+}
+
+func perft(p Position, depth int) int {
+	if depth == 0 {
+		return 1
+	}
+
 	var nodes int
 	moves := movesPool.Get().(*[]Move)
 	defer movesPool.Put(moves)
@@ -88,14 +107,9 @@ func Perft(p Position, depth int, print bool, output io.Writer) int {
 
 	for _, m := range *moves {
 		newPos := p.Do(m)
-		newNodes := Perft(newPos, depth-1, false, nil)
-		if print {
-			fmt.Fprintf(output, "%s: %d\n", m, newNodes)
-		}
+		newNodes := perft(newPos, depth-1)
 		nodes += newNodes
-		//p.Undo()
 	}
-	//movesPool.Put(moves)
 	return nodes
 }
 
@@ -223,30 +237,11 @@ func genBishopsAttacks(p *Position, us, them Color) BitBoard {
 }
 
 func genBishopAttacks(sq Square, occupied BitBoard) BitBoard {
-	attacks := rays[NorthWest][sq]
-	if intersect := rays[NorthWest][sq] & occupied; intersect != 0 {
-		index := bits.LeadingZeros64(uint64(intersect))
-		attacks &^= rays[NorthWest][63-index]
-	}
-
-	attacks |= rays[NorthEast][sq]
-	if intersect := rays[NorthEast][sq] & occupied; intersect != 0 {
-		index := bits.LeadingZeros64(uint64(intersect))
-		attacks &^= rays[NorthEast][63-index]
-	}
-
-	attacks |= rays[SouthWest][sq]
-	if intersect := rays[SouthWest][sq] & occupied; intersect != 0 {
-		index := bits.TrailingZeros64(uint64(intersect))
-		attacks &^= rays[SouthWest][index]
-	}
-
-	attacks |= rays[SouthEast][sq]
-	if intersect := rays[SouthEast][sq] & occupied; intersect != 0 {
-		index := bits.TrailingZeros64(uint64(intersect))
-		attacks &^= rays[SouthEast][index]
-	}
-	return attacks
+	m := BishopMagic[sq]
+	occupied &= m.Mask
+	occupied *= m.Magic
+	occupied >>= m.Shift
+	return m.Attacks[occupied]
 }
 
 func genRooksAttacks(p *Position, us, them Color) BitBoard {
@@ -265,30 +260,11 @@ func genRooksAttacks(p *Position, us, them Color) BitBoard {
 }
 
 func genRookAttacks(sq Square, occupied BitBoard) BitBoard {
-	attacks := rays[North][sq]
-	if intersect := rays[North][sq] & occupied; intersect != 0 {
-		index := bits.LeadingZeros64(uint64(intersect))
-		attacks &^= rays[North][63-index]
-	}
-
-	attacks |= rays[South][sq]
-	if intersect := rays[South][sq] & occupied; intersect != 0 {
-		index := bits.TrailingZeros64(uint64(intersect))
-		attacks &^= rays[South][index]
-	}
-
-	attacks |= rays[East][sq]
-	if intersect := rays[East][sq] & occupied; intersect != 0 {
-		index := bits.TrailingZeros64(uint64(intersect))
-		attacks &^= rays[East][index]
-	}
-
-	attacks |= rays[West][sq]
-	if intersect := rays[West][sq] & occupied; intersect != 0 {
-		index := bits.LeadingZeros64(uint64(intersect))
-		attacks &^= rays[West][63-index]
-	}
-	return attacks
+	m := RookMagic[sq]
+	occupied &= m.Mask
+	occupied *= m.Magic
+	occupied >>= m.Shift
+	return m.Attacks[occupied]
 }
 
 func genQueensAttacks(p *Position, us, them Color) BitBoard {
@@ -383,7 +359,8 @@ func genAttackMoves(moves *[]Move, cfg config, pawns, enemies BitBoard, moveMask
 		var to Square
 		to, attacks = attacks.PopLSB()
 		from := to - Square(cfg.leftAttacks)
-		if kingSq.File() == from.File() {
+		// we need to check if we are in the kings diagonal
+		if lineFromTo[kingSq][from]&lineFromTo[kingSq][to] == 0 {
 			continue
 		}
 
@@ -423,7 +400,7 @@ func genAttackMoves(moves *[]Move, cfg config, pawns, enemies BitBoard, moveMask
 		var to Square
 		to, attacks = attacks.PopLSB()
 		from := to - Square(cfg.rightAttacks)
-		if kingSq.File() == from.File() {
+		if lineFromTo[kingSq][from]&lineFromTo[kingSq][to] == 0 {
 			continue
 		}
 

@@ -28,7 +28,7 @@ func TestMoveGen(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		if got := pawned.Perft(p, test.depth, false, os.Stdout); got != test.nodes {
+		if got := pawned.Perft(p, test.depth, os.Stdout); got != test.nodes {
 			t.Fatalf("Perft(%d) = %d, want %d", test.depth, got, test.nodes)
 		}
 	}
@@ -115,6 +115,16 @@ func TestWhitePawnMoves(t *testing.T) {
 				"g2g4", "h2h3", "h2h4",
 			},
 		},
+		{
+			fen: "rnbqkbnr/1ppp1p1p/4p1p1/pP6/8/2N5/P1PPPPPP/R1BQKBNR w KQkq a6 0 4",
+			expected: []string{
+				"a1b1", "a2a3", "a2a4", "b5a6", "b5b6",
+				"c1a3", "c1b2", "c3a4", "c3b1", "c3d5",
+				"c3e4", "d2d3", "d2d4", "e2e3", "e2e4",
+				"f2f3", "f2f4", "g1f3", "g1h3", "g2g3",
+				"g2g4", "h2h3", "h2h4",
+			},
+		},
 	}
 
 	for _, test := range tests {
@@ -137,33 +147,54 @@ func TestWhitePawnMoves(t *testing.T) {
 }
 
 func TestBlackPawnMoves(t *testing.T) {
-	fen := "4k3/p4p1p/8/Pp6/2pPp2P/1N3N2/1p4p1/R1B1KB1R b - d3 0 1"
-	p, err := pawned.Parse(fen)
-	if err != nil {
-		t.Fatal(err)
+
+	tests := []struct {
+		fen      string
+		expected []string
+	}{
+		{
+			fen: "4k3/p4p1p/8/Pp6/2pPp2P/1N3N2/1p4p1/R1B1KB1R b - d3 0 1",
+			expected: []string{
+				"a7a6", "b2a1b", "b2a1n", "b2a1q", "b2a1r",
+				"b2b1b", "b2b1n", "b2b1q", "b2b1r", "b2c1b",
+				"b2c1n", "b2c1q", "b2c1r", "b5b4", "c4b3",
+				"c4c3", "c4d3", "e4d3", "e4e3", "e4f3",
+				"e8d7", "e8d8", "e8e7", "e8f8", "f7f5",
+				"f7f6", "g2f1b", "g2f1n", "g2f1q", "g2f1r",
+				"g2g1b", "g2g1n", "g2g1q", "g2g1r", "g2h1b",
+				"g2h1n", "g2h1q", "g2h1r", "h7h5", "h7h6",
+			},
+		},
+		{
+			fen: "rnbqkbnr/p3pppp/3p4/1pp5/Q1P5/N7/PP1PPPPP/1RB1KBNR b Kkq - 1 4",
+			expected: []string{
+				"a7a5", "a7a6", "b5a4", "b8a6", "b8c6",
+				"b8d7", "c8a6", "c8b7", "c8d7", "c8e6",
+				"c8f5", "c8g4", "c8h3", "d6d5", "d8a5",
+				"d8b6", "d8c7", "d8d7", "e7e5", "e7e6",
+				"e8d7", "f7f5", "f7f6", "g7g5", "g7g6",
+				"g8f6", "g8h6", "h7h5", "h7h6",
+			},
+		},
 	}
 
-	expected := []string{
-		"a7a6", "b2a1b", "b2a1n", "b2a1q", "b2a1r",
-		"b2b1b", "b2b1n", "b2b1q", "b2b1r", "b2c1b",
-		"b2c1n", "b2c1q", "b2c1r", "b5b4", "c4b3",
-		"c4c3", "c4d3", "e4d3", "e4e3", "e4f3",
-		"e8d7", "e8d8", "e8e7", "e8f8", "f7f5",
-		"f7f6", "g2f1b", "g2f1n", "g2f1q", "g2f1r",
-		"g2g1b", "g2g1n", "g2g1q", "g2g1r", "g2h1b",
-		"g2h1n", "g2h1q", "g2h1r", "h7h5", "h7h6",
-	}
+	for _, test := range tests {
+		p, err := pawned.Parse(test.fen)
+		if err != nil {
+			t.Fatal(err)
+		}
 
-	var moves []pawned.Move
-	var got []string
-	pawned.LegalMoves(&moves, &p)
-	for _, move := range moves {
-		got = append(got, move.String())
-	}
-	slices.Sort(got)
+		var moves []pawned.Move
+		var got []string
+		pawned.LegalMoves(&moves, &p)
+		for _, move := range moves {
+			got = append(got, move.String())
+		}
+		slices.Sort(got)
 
-	if !slices.Equal(got, expected) {
-		t.Fatalf("LegalMoves(%s) got(%d) %s, want(%d) %s", fen, len(got), got, len(expected), expected)
+		if !slices.Equal(got, test.expected) {
+			t.Fatalf("LegalMoves(%s) got(%d) %s, want(%d) %s", test.fen, len(got), got, len(test.expected), test.expected)
+		}
 	}
 }
 

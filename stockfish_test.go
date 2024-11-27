@@ -52,7 +52,7 @@ func TestCompareToStockfish(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		pawned.Perft(p, i, true, &output)
+		pawned.Perft(p, i, &output)
 		pawnedMoves := readOutput(bufio.NewReader(&output))
 
 		// Compare the results
