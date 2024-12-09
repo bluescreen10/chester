@@ -270,25 +270,42 @@ func calculateLineFromTo() [64][64]uint64 {
 
 			if r1 == r2 {
 				if f1 < f2 {
-					lineFromTo[i][j] = rays[East][i]
+					lineFromTo[i][j] = rays[East][i] &^ rays[East][j]
+					lineFromTo[i][j] |= (1 << j)
+					lineFromTo[i][j] |= (1 << i)
+
 				} else {
-					lineFromTo[i][j] = rays[West][i]
+					lineFromTo[i][j] = rays[West][i] &^ rays[West][j]
+					lineFromTo[i][j] |= (1 << j)
+					lineFromTo[i][j] |= (1 << i)
 				}
 			} else if f1 == f2 {
 				if r1 < r2 {
-					lineFromTo[i][j] = rays[North][i]
+					lineFromTo[i][j] = rays[North][i] &^ rays[North][j]
+					lineFromTo[i][j] |= (1 << j)
+					lineFromTo[i][j] |= (1 << i)
 				} else {
-					lineFromTo[i][j] = rays[South][i]
+					lineFromTo[i][j] = rays[South][i] &^ rays[South][j]
+					lineFromTo[i][j] |= (1 << j)
+					lineFromTo[i][j] |= (1 << i)
 				}
 			} else if abs(r1-r2) == abs(f1-f2) {
 				if r1 < r2 && f1 < f2 {
-					lineFromTo[i][j] = rays[NorthEast][i]
+					lineFromTo[i][j] = rays[NorthEast][i] &^ rays[NorthEast][j]
+					lineFromTo[i][j] |= (1 << j)
+					lineFromTo[i][j] |= (1 << i)
 				} else if r1 < r2 && f1 > f2 {
-					lineFromTo[i][j] = rays[NorthWest][i]
+					lineFromTo[i][j] = rays[NorthWest][i] &^ rays[NorthWest][j]
+					lineFromTo[i][j] |= (1 << j)
+					lineFromTo[i][j] |= (1 << i)
 				} else if r1 > r2 && f1 < f2 {
-					lineFromTo[i][j] = rays[SouthEast][i]
+					lineFromTo[i][j] = rays[SouthEast][i] &^ rays[SouthEast][j]
+					lineFromTo[i][j] |= (1 << j)
+					lineFromTo[i][j] |= (1 << i)
 				} else {
-					lineFromTo[i][j] = rays[SouthWest][i]
+					lineFromTo[i][j] = rays[SouthWest][i] &^ rays[SouthWest][j]
+					lineFromTo[i][j] |= (1 << j)
+					lineFromTo[i][j] |= (1 << i)
 				}
 			}
 		}

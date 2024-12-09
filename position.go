@@ -373,101 +373,100 @@ func (p *Position) CanBlackCastleQueenSide() bool {
 	return p.CastlingRights&BlackQueenSideCastle != 0
 }
 
-func (p *Position) Do(m Move) Position {
+func (p *Position) Do(m Move) { //} Position {
 
-	new := *p
+	//p := *p
 
-	us, them := new.SideToMove()
-	new.removeAll(them, m.To)
-	new.remove(m.Piece, us, m.From)
+	us, them := p.SideToMove()
+	//isCapture := 1<<m.To&p.AllPieces[them] != 0
+	p.removeAll(them, m.To)
+	p.remove(m.Piece, us, m.From)
 
 	switch m.Type {
 	case EnPassant:
 		if us == White {
-			new.remove(Pawn, them, m.To+8)
+			p.remove(Pawn, them, m.To+8)
 		} else {
-			new.remove(Pawn, them, m.To-8)
+			p.remove(Pawn, them, m.To-8)
 		}
-		new.put(Pawn, us, m.To)
+		p.put(Pawn, us, m.To)
 	case PromotionToKnight:
-		new.put(Knight, us, m.To)
+		p.put(Knight, us, m.To)
 	case PromotionToBishop:
-		new.put(Bishop, us, m.To)
+		p.put(Bishop, us, m.To)
 	case PromotionToRook:
-		new.put(Rook, us, m.To)
+		p.put(Rook, us, m.To)
 	case PromotionToQueen:
-		new.put(Queen, us, m.To)
+		p.put(Queen, us, m.To)
 	case Castle:
 		switch m.To {
 		case SQ_G1:
-			new.put(King, White, SQ_G1)
-			new.put(Rook, White, SQ_F1)
-			new.remove(Rook, White, SQ_H1)
+			p.put(King, White, SQ_G1)
+			p.put(Rook, White, SQ_F1)
+			p.remove(Rook, White, SQ_H1)
 		case SQ_C1:
-			new.put(King, White, SQ_C1)
-			new.put(Rook, White, SQ_D1)
-			new.remove(Rook, White, SQ_A1)
+			p.put(King, White, SQ_C1)
+			p.put(Rook, White, SQ_D1)
+			p.remove(Rook, White, SQ_A1)
 		case SQ_G8:
-			new.put(King, Black, SQ_G8)
-			new.put(Rook, Black, SQ_F8)
-			new.remove(Rook, Black, SQ_H8)
+			p.put(King, Black, SQ_G8)
+			p.put(Rook, Black, SQ_F8)
+			p.remove(Rook, Black, SQ_H8)
 		case SQ_C8:
-			new.put(King, Black, SQ_C8)
-			new.put(Rook, Black, SQ_D8)
-			new.remove(Rook, Black, SQ_A8)
+			p.put(King, Black, SQ_C8)
+			p.put(Rook, Black, SQ_D8)
+			p.remove(Rook, Black, SQ_A8)
 		}
 	default:
-		new.put(m.Piece, us, m.To)
+		p.put(m.Piece, us, m.To)
 	}
 
-	new.EnPassantSquare = SQ_NULL
+	p.EnPassantSquare = SQ_NULL
 
 	if m.Piece == Pawn {
 		if m.From-m.To == 16 {
-			new.EnPassantSquare = m.To + 8
+			p.EnPassantSquare = m.To + 8
 		}
 
 		if m.To-m.From == 16 {
-			new.EnPassantSquare = m.To - 8
+			p.EnPassantSquare = m.To - 8
 		}
 	}
 
-	if new.CastlingRights != 0 {
-		if m.Type == Castle && us == White {
-			new.CastlingRights &^= WhiteKingSideCastle
-			new.CastlingRights &^= WhiteQueenSideCastle
-		}
-
-		if m.Type == Castle && us == Black {
-			new.CastlingRights &^= BlackKingSideCastle
-			new.CastlingRights &^= BlackQueenSideCastle
-		}
-
-		if m.From == SQ_A1 || m.To == SQ_A1 {
-			new.CastlingRights &^= WhiteQueenSideCastle
-		}
-
-		if m.From == SQ_H1 || m.To == SQ_H1 {
-			new.CastlingRights &^= WhiteKingSideCastle
-		}
-
-		if m.From == SQ_A8 || m.To == SQ_A8 {
-			new.CastlingRights &^= BlackQueenSideCastle
-		}
-
-		if m.From == SQ_H8 || m.To == SQ_H8 {
-			new.CastlingRights &^= BlackKingSideCastle
-		}
+	if m.Type == Castle && us == White {
+		p.CastlingRights &^= WhiteKingSideCastle
+		p.CastlingRights &^= WhiteQueenSideCastle
 	}
 
-	new.WhiteToMove = !p.WhiteToMove
-	new.HalfMoves++
+	if m.Type == Castle && us == Black {
+		p.CastlingRights &^= BlackKingSideCastle
+		p.CastlingRights &^= BlackQueenSideCastle
+	}
+
+	if m.From == SQ_A1 || m.To == SQ_A1 {
+		p.CastlingRights &^= WhiteQueenSideCastle
+	}
+
+	if m.From == SQ_H1 || m.To == SQ_H1 {
+		p.CastlingRights &^= WhiteKingSideCastle
+	}
+
+	if m.From == SQ_A8 || m.To == SQ_A8 {
+		p.CastlingRights &^= BlackQueenSideCastle
+	}
+
+	if m.From == SQ_H8 || m.To == SQ_H8 {
+		p.CastlingRights &^= BlackKingSideCastle
+	}
+
+	p.WhiteToMove = !p.WhiteToMove
+	p.HalfMoves++
 
 	if us == Black {
-		new.FullMoves++
+		p.FullMoves++
 	}
 
-	return new
+	//return new
 }
 
 //func (p *Position) Undo () {}

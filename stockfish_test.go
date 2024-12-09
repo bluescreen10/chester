@@ -7,9 +7,12 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"maps"
 	"os/exec"
 	"regexp"
+	"sort"
 	"strconv"
+	"strings"
 	"testing"
 
 	"math/rand"
@@ -18,80 +21,66 @@ import (
 )
 
 func TestCompareToStockfish(t *testing.T) {
-	depth := 8
+	maxDepth := 
+	for depth := 1; depth <= maxDepth; depth++ {
+		comparePawnedAndStockfish(t, depth, "")
+	}
+}
 
-	// Launch stockfish
+func comparePawnedAndStockfish(t *testing.T, depth int, moves string) {
+	// Run Stockfish
+	sfMoves, fen := sfPerft(depth, moves)
+
+	// Run our engine
+	p, err := pawned.Parse(fen)
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := bytes.Buffer{}
+	pawned.Perft(p, depth, &output)
+	pawnedMoves := readOutput(bufio.NewReader(&output))
+
+	// Compare the results
+	diff := compareMaps(pawnedMoves, sfMoves)
+
+	if len(diff) > 0 {
+		move := pickRandomMove(diff)
+		if depth < 2 {
+			t.Fatalf(
+				"move: %s, stockfish: %d, pawned: %d\n"+
+					"moves: %s\n"+
+					"fen: %s\n"+
+					"%s\n",
+				move, len(sfMoves), len(pawnedMoves), movesToString(sfMoves), fen, p)
+		} else {
+			comparePawnedAndStockfish(t, depth-1, moves+" "+move)
+		}
+	}
+}
+
+func sfPerft(depth int, moves string) (map[string]int, string) {
 	stockfish := exec.Command("stockfish")
+
 	sfIn, _ := stockfish.StdinPipe()
 	sfOut, _ := stockfish.StdoutPipe()
 	sfOutputReader := bufio.NewReader(sfOut)
 
 	if err := stockfish.Start(); err != nil {
-		t.Fatal(err)
+		panic(err)
+	}
+	defer stockfish.Process.Kill()
+
+	if moves != "" {
+		sfIn.Write([]byte(fmt.Sprintf("position startpos moves %s\n", moves)))
+	} else {
+		sfIn.Write([]byte("position startpos\n"))
 	}
 
-	//create a buffer to capture the output
-	output := bytes.Buffer{}
-	var moves string
+	sfIn.Write([]byte(fmt.Sprintf("d %d\n", depth)))
+	fen := readFen(sfOutputReader)
 
-	for i := depth; i > 0; i-- {
-		if moves != "" {
-			sfIn.Write([]byte(fmt.Sprintf("position startpos moves %s\n", moves)))
-		} else {
-			sfIn.Write([]byte("position startpos\n"))
-		}
-
-		sfIn.Write([]byte(fmt.Sprintf("d %d\n", i)))
-		fen := readFen(sfOutputReader)
-
-		sfIn.Write([]byte(fmt.Sprintf("go perft %d\n", i)))
-		sfMoves := readOutput(sfOutputReader)
-
-		// Run our engine
-		p, err := pawned.Parse(fen)
-		if err != nil {
-			t.Fatal(err)
-		}
-		pawned.Perft(p, i, &output)
-		pawnedMoves := readOutput(bufio.NewReader(&output))
-
-		// Compare the results
-		diff := make(map[string]any)
-		for move, count := range sfMoves {
-			if pawnedCount, ok := pawnedMoves[move]; ok {
-				if count != pawnedCount {
-					t.Errorf("Fen: %s depth: %d move %s: Stockfish: %d, Pawned: %d\n", fen, i, move, count, pawnedCount)
-					t.Logf("\n%s\n", p)
-					diff[move] = struct{}{}
-				}
-			} else {
-				t.Errorf("Fen: %s depth: %d move %s not found in Pawned\n", fen, i, move)
-				t.Logf("\n%s\n", p)
-				diff[move] = struct{}{}
-			}
-		}
-
-		for move := range pawnedMoves {
-			if _, ok := sfMoves[move]; !ok {
-				t.Errorf("Fen: %s depth: %d move %s not found in Stockfish\n", fen, i, move)
-				t.Logf("\n%s", p)
-				diff[move] = struct{}{}
-			}
-		}
-
-		// pick a random move that is different
-		if len(diff) > 0 {
-			// obtain the keys
-			keys := make([]string, 0, len(diff))
-			for k := range diff {
-				keys = append(keys, k)
-			}
-			moves += " " + keys[rand.Intn(len(keys))]
-		}
-
-	}
-
-	stockfish.Process.Kill()
+	sfIn.Write([]byte(fmt.Sprintf("go perft %d\n", depth)))
+	return readOutput(sfOutputReader), fen
 }
 
 func readOutput(reader *bufio.Reader) map[string]int {
@@ -130,4 +119,40 @@ func readFen(reader *bufio.Reader) string {
 		}
 	}
 	panic("Fen not found")
+}
+
+func movesToString(moves map[string]int) string {
+	var allMoves []string
+	for m := range maps.Keys(moves) {
+		allMoves = append(allMoves, m)
+	}
+	sort.Strings(allMoves)
+	return "\"" + strings.Join(allMoves, "\", \"") + "\""
+}
+
+func pickRandomMove(moves map[string]int) string {
+	var allMoves []string
+	for m := range maps.Keys(moves) {
+		allMoves = append(allMoves, m)
+	}
+	return allMoves[rand.Intn(len(allMoves))]
+}
+
+func compareMaps(map1, map2 map[string]int) map[string]int {
+	diff := make(map[string]int)
+	for move, count := range map1 {
+		if count2, ok := map2[move]; ok {
+			if count != count2 {
+				diff[move] = count
+			}
+		} else {
+			diff[move] = count
+		}
+	}
+	for move, count := range map2 {
+		if _, ok := map1[move]; !ok {
+			diff[move] = count
+		}
+	}
+	return diff
 }

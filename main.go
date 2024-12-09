@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"runtime/pprof"
+	"time"
 )
 
 const DefaultFEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
@@ -31,5 +32,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("Node(depth = %d): %d\n", *depth, Perft(p, *depth, os.Stdout))
+	start := time.Now()
+	nodes := Perft(p, *depth, os.Stdout)
+	fmt.Printf("Nodes(depth = %d): %d in %s \n", *depth, nodes, time.Since(start))
 }

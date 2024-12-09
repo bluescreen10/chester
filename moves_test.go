@@ -1,6 +1,7 @@
 package main_test
 
 import (
+	"fmt"
 	"os"
 	"slices"
 	"testing"
@@ -93,6 +94,26 @@ func TestWhitePawnMoves(t *testing.T) {
 		expected []string
 	}{
 		{
+			// En Passant with veritcal pin
+			fen: "rnb1kbnr/pppp1p1p/5q2/4pPp1/8/8/PPPPPKPP/RNBQ1BNR w kq g6 0 4",
+			expected: []string{
+				"a2a3", "a2a4", "b1a3", "b1c3", "b2b3",
+				"b2b4", "c2c3", "c2c4", "d1e1", "d2d3",
+				"d2d4", "e2e3", "e2e4", "f2e1", "f2e3",
+				"f2f3", "f2g3", "g1f3", "g1h3", "g2g3",
+				"g2g4", "h2h3", "h2h4",
+			},
+		},
+		{
+			fen: "rnbqk1nr/pppp1ppp/4p3/P7/1b6/8/1PPPPPPP/RNBQKBNR w KQkq - 1 3",
+			expected: []string{
+				"a1a2", "a1a3", "a1a4", "a5a6", "b1a3",
+				"b1c3", "b2b3", "c2c3", "c2c4", "e2e3",
+				"e2e4", "f2f3", "f2f4", "g1f3", "g1h3",
+				"g2g3", "g2g4", "h2h3", "h2h4",
+			},
+		},
+		{
 			fen: "r1b1kb1r/1P4P1/1n3n2/2PpP2p/8/pP6/P4P1P/4K3 w - d6 0 1",
 			expected: []string{
 				"b3b4", "b7a8b", "b7a8n", "b7a8q", "b7a8r",
@@ -141,7 +162,7 @@ func TestWhitePawnMoves(t *testing.T) {
 		slices.Sort(got)
 
 		if !slices.Equal(got, test.expected) {
-			t.Fatalf("LegalMoves(%s) got(%d) %s, want(%d) %s", test.fen, len(got), got, len(test.expected), test.expected)
+			t.Fatal(formatError(p, got, test.expected))
 		}
 	}
 }
@@ -152,6 +173,16 @@ func TestBlackPawnMoves(t *testing.T) {
 		fen      string
 		expected []string
 	}{
+		{
+			fen: "rnbqkbnr/pppp2pp/5p2/8/2PPp3/4Q3/PP2PPPP/RNB1KBNR b KQkq d3 0 4",
+			expected: []string{
+				"a7a5", "a7a6", "b7b5", "b7b6", "b8a6",
+				"b8c6", "c7c5", "c7c6", "d7d5", "d7d6",
+				"d8e7", "e8e7", "e8f7", "f6f5", "f8a3",
+				"f8b4", "f8c5", "f8d6", "f8e7", "g7g5",
+				"g7g6", "g8e7", "g8h6", "h7h5", "h7h6",
+			},
+		},
 		{
 			fen: "4k3/p4p1p/8/Pp6/2pPp2P/1N3N2/1p4p1/R1B1KB1R b - d3 0 1",
 			expected: []string{
@@ -176,6 +207,25 @@ func TestBlackPawnMoves(t *testing.T) {
 				"g8f6", "g8h6", "h7h5", "h7h6",
 			},
 		},
+		{
+			// Vertical potential pin en passant (c4d3)
+			fen: "rnbq1bnr/pp1kpppp/8/8/2pPP3/8/PPP2PPP/RNBQK1NR b KQ d3 0 4",
+			expected: []string{
+				"a7a5", "a7a6", "b7b5", "b7b6", "b8a6",
+				"b8c6", "c4c3", "c4d3", "d7c6", "d7c7",
+				"d7d6", "d7e6", "d7e8", "d8a5", "d8b6",
+				"d8c7", "d8e8", "e7e5", "e7e6", "f7f5",
+				"f7f6", "g7g5", "g7g6", "g8f6", "g8h6",
+				"h7h5", "h7h6",
+			},
+		},
+		{
+			fen: "rnbqkbnr/ppp1pppp/8/3p4/Q1P5/8/PP1PPPPP/RNB1KBNR b KQkq - 1 2",
+			expected: []string{
+				"b7b5", "b8c6", "b8d7", "c7c6", "c8d7",
+				"d8d7",
+			},
+		},
 	}
 
 	for _, test := range tests {
@@ -193,7 +243,7 @@ func TestBlackPawnMoves(t *testing.T) {
 		slices.Sort(got)
 
 		if !slices.Equal(got, test.expected) {
-			t.Fatalf("LegalMoves(%s) got(%d) %s, want(%d) %s", test.fen, len(got), got, len(test.expected), test.expected)
+			t.Fatal(formatError(p, got, test.expected))
 		}
 	}
 }
@@ -388,6 +438,27 @@ func TestWhiteQueenMoves(t *testing.T) {
 		expected []string
 	}{
 		{
+			// Pinned queen moving out of the pin without capturing
+			fen: "rn1qkbnr/ppp1pppp/8/8/4p1b1/8/PPPPQPPP/RNBK1BNR w kq - 2 4",
+			expected: []string{
+				"a2a3", "a2a4", "b1a3", "b1c3", "b2b3",
+				"b2b4", "c2c3", "c2c4", "d1e1", "d2d3",
+				"d2d4", "e2f3", "e2g4", "f2f3", "f2f4",
+				"g1f3", "g1h3", "g2g3", "h2h3", "h2h4",
+			},
+		},
+		{
+			// Pinned queen moving straight to another pinned ray
+			fen: "rnb1k1nr/pppp1ppp/8/4p3/1b1P3q/2Q5/PPP1PPPP/RNB1KBNR w KQkq - 4 4",
+			expected: []string{
+				"a2a3", "a2a4", "b1a3", "b1d2", "b2b3",
+				"c1d2", "c1e3", "c1f4", "c1g5", "c1h6",
+				"c3b4", "c3d2", "d4d5", "d4e5", "e1d1",
+				"e1d2", "e2e3", "e2e4", "g1f3", "g1h3",
+				"g2g3", "g2g4", "h2h3",
+			},
+		},
+		{
 			fen: "8/3k4/8/8/1q6/b2r4/p7/KQ1n4 w - - 0 1",
 			expected: []string{
 				"a1a2", "b1a2", "b1b2", "b1b3", "b1b4",
@@ -440,7 +511,12 @@ func TestBlackQueenMoves(t *testing.T) {
 		slices.Sort(got)
 
 		if !slices.Equal(got, test.expected) {
-			t.Fatalf("LegalMoves(%s) got(%d) %s, want(%d) %s", test.fen, len(got), got, len(test.expected), test.expected)
+			d := diff(test.expected, got)
+			t.Fatalf(
+				"LegalMoves(%s) got(%d) %s, want(%d) %s\n"+
+					"Diff: %s\n"+
+					"Position: %s\n",
+				test.fen, len(got), got, len(test.expected), test.expected, d, p)
 		}
 	}
 }
@@ -548,4 +624,33 @@ func TestBlackKingMoves(t *testing.T) {
 			t.Fatalf("LegalMoves(%s) got(%d) %s, want(%d) %s", test.fen, len(got), got, len(test.expected), test.expected)
 		}
 	}
+}
+
+func formatError(pos pawned.Position, got, expected []string) string {
+	moveDiff := diff(expected, got)
+	return fmt.Sprintf(
+		"Legal moves generation failed\n"+
+			"Fen: %s\n"+
+			"Got(%d):  %s\n"+
+			"Want(%d): %s\n"+
+			"Diff: %s\n"+
+			"Position:\n%s\n",
+		pos.Fen(), len(got), got, len(expected), expected, moveDiff, pos)
+}
+
+func diff(expected, got []string) []string {
+	var diff []string
+	for _, e := range expected {
+		if !slices.Contains(got, e) {
+			diff = append(diff, e)
+		}
+	}
+
+	for _, g := range got {
+		if !slices.Contains(expected, g) {
+			diff = append(diff, g)
+		}
+	}
+
+	return diff
 }
