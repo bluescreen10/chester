@@ -246,11 +246,11 @@ func genBishopsAttacks(p *Position, us, them Color) BitBoard {
 }
 
 func genBishopAttacks(sq Square, occupied BitBoard) BitBoard {
-	m := BishopMagic[sq]
-	occupied &= m.Mask
-	occupied *= m.Magic
-	occupied >>= m.Shift
-	return m.Attacks[occupied]
+
+	occupied &= BishopMagic[sq].Mask
+	occupied *= BishopMagic[sq].Magic
+	occupied >>= BishopMagic[sq].Shift
+	return BishopMagic[sq].Attacks[occupied]
 }
 
 func genRooksAttacks(p *Position, us, them Color) BitBoard {
@@ -269,11 +269,11 @@ func genRooksAttacks(p *Position, us, them Color) BitBoard {
 }
 
 func genRookAttacks(sq Square, occupied BitBoard) BitBoard {
-	m := RookMagic[sq]
-	occupied &= m.Mask
-	occupied *= m.Magic
-	occupied >>= m.Shift
-	return m.Attacks[occupied]
+	//m := RookMagic[sq]
+	occupied &= RookMagic[sq].Mask
+	occupied *= RookMagic[sq].Magic
+	occupied >>= RookMagic[sq].Shift
+	return RookMagic[sq].Attacks[occupied]
 }
 
 func genQueensAttacks(p *Position, us, them Color) BitBoard {
@@ -423,7 +423,7 @@ func genEnPassantMoves(moves *[]Move, cfg config, pawns, occupied, enPassantFile
 			for potentialCheckers != 0 {
 				var checker Square
 				checker, potentialCheckers = potentialCheckers.PopLSB()
-				if (lineFromTo[kingSq][checker] & occupiedWithoutPawns).OnesCount() > 2 {
+				if squaresBetween[kingSq][checker]&occupiedWithoutPawns != 0 {
 					*moves = append(*moves, Move{Piece: Pawn, From: from, To: sq, Type: EnPassant})
 				}
 			}
@@ -443,7 +443,7 @@ func genEnPassantMoves(moves *[]Move, cfg config, pawns, occupied, enPassantFile
 			for potentialCheckers != 0 {
 				var checker Square
 				checker, potentialCheckers = potentialCheckers.PopLSB()
-				if (lineFromTo[kingSq][checker] & occupiedWithoutPawns).OnesCount() > 2 {
+				if squaresBetween[kingSq][checker]&occupiedWithoutPawns != 0 {
 					*moves = append(*moves, Move{Piece: Pawn, From: from, To: sq, Type: EnPassant})
 				}
 			}
