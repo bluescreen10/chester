@@ -16,10 +16,7 @@ const (
 	Default MoveType = iota
 	Castle
 	EnPassant
-	PromotionToQueen
-	PromotionToRook
-	PromotionToBishop
-	PromotionToKnight
+	Promotion
 )
 
 // Eventualy we want to use uint16
@@ -27,9 +24,9 @@ const (
 // Next 6 bits from square
 // Last 6 bits to square
 type Move struct {
-	Piece    Piece
-	Type     MoveType
-	From, To Square
+	Piece, PromotionPiece Piece
+	Type                  MoveType
+	From, To              Square
 }
 
 type config struct {
@@ -52,16 +49,18 @@ func (m Move) String() string {
 
 	suffix := ""
 
-	switch m.Type {
-	case PromotionToBishop:
-		suffix = "b"
-	case PromotionToKnight:
-		suffix = "n"
-	case PromotionToRook:
-		suffix = "r"
-	case PromotionToQueen:
-		suffix = "q"
-	default:
+	if m.Type == Promotion {
+		switch m.PromotionPiece {
+		case Bishop:
+			suffix = "b"
+		case Knight:
+			suffix = "n"
+		case Rook:
+			suffix = "r"
+		case Queen:
+			suffix = "q"
+		default:
+		}
 	}
 
 	return fmt.Sprintf("%c%d%c%d%s", 'a'+fromFile, fromRank+1, 'a'+toFile, toRank+1, suffix)
@@ -334,10 +333,10 @@ func genForwardMoves(moves *[]Move, cfg config, pawns, occupied BitBoard, moveMa
 		to, pushes = pushes.PopLSB()
 		from := to - Square(cfg.singlePushes)
 		*moves = append(*moves,
-			Move{Piece: Pawn, From: from, To: to, Type: PromotionToQueen},
-			Move{Piece: Pawn, From: from, To: to, Type: PromotionToRook},
-			Move{Piece: Pawn, From: from, To: to, Type: PromotionToBishop},
-			Move{Piece: Pawn, From: from, To: to, Type: PromotionToKnight},
+			Move{Piece: Pawn, From: from, To: to, Type: Promotion, PromotionPiece: Queen},
+			Move{Piece: Pawn, From: from, To: to, Type: Promotion, PromotionPiece: Rook},
+			Move{Piece: Pawn, From: from, To: to, Type: Promotion, PromotionPiece: Bishop},
+			Move{Piece: Pawn, From: from, To: to, Type: Promotion, PromotionPiece: Knight},
 		)
 	}
 
@@ -370,10 +369,10 @@ func genLeftAttackMoves(moves *[]Move, cfg config, pawns, enemies BitBoard, move
 		from := to - Square(cfg.leftAttacks)
 
 		*moves = append(*moves,
-			Move{Piece: Pawn, From: from, To: to, Type: PromotionToQueen},
-			Move{Piece: Pawn, From: from, To: to, Type: PromotionToRook},
-			Move{Piece: Pawn, From: from, To: to, Type: PromotionToBishop},
-			Move{Piece: Pawn, From: from, To: to, Type: PromotionToKnight},
+			Move{Piece: Pawn, From: from, To: to, Type: Promotion, PromotionPiece: Queen},
+			Move{Piece: Pawn, From: from, To: to, Type: Promotion, PromotionPiece: Rook},
+			Move{Piece: Pawn, From: from, To: to, Type: Promotion, PromotionPiece: Bishop},
+			Move{Piece: Pawn, From: from, To: to, Type: Promotion, PromotionPiece: Knight},
 		)
 
 	}
@@ -399,10 +398,10 @@ func genRightAttackMoves(moves *[]Move, cfg config, pawns, enemies BitBoard, mov
 		from := to - Square(cfg.rightAttacks)
 
 		*moves = append(*moves,
-			Move{Piece: Pawn, From: from, To: to, Type: PromotionToQueen},
-			Move{Piece: Pawn, From: from, To: to, Type: PromotionToRook},
-			Move{Piece: Pawn, From: from, To: to, Type: PromotionToBishop},
-			Move{Piece: Pawn, From: from, To: to, Type: PromotionToKnight},
+			Move{Piece: Pawn, From: from, To: to, Type: Promotion, PromotionPiece: Queen},
+			Move{Piece: Pawn, From: from, To: to, Type: Promotion, PromotionPiece: Rook},
+			Move{Piece: Pawn, From: from, To: to, Type: Promotion, PromotionPiece: Bishop},
+			Move{Piece: Pawn, From: from, To: to, Type: Promotion, PromotionPiece: Knight},
 		)
 
 	}

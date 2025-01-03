@@ -373,94 +373,90 @@ func (p *Position) CanBlackCastleQueenSide() bool {
 	return p.CastlingRights&BlackQueenSideCastle != 0
 }
 
-func (p *Position) Do(m Move) { //} Position {
+const (
+	BB_SQ_A1 BitBoard = 1 << SQ_A1
+	BB_SQ_D1 BitBoard = 1 << SQ_D1
+	BB_SQ_H1 BitBoard = 1 << SQ_H1
+	BB_SQ_F1 BitBoard = 1 << SQ_F1
+	BB_SQ_A8 BitBoard = 1 << SQ_A8
+	BB_SQ_F8 BitBoard = 1 << SQ_F8
+	BB_SQ_H8 BitBoard = 1 << SQ_H8
+	BB_SQ_D8 BitBoard = 1 << SQ_D8
+)
 
-	//p := *p
+func (p *Position) Do(m Move) {
 
+	//enPassant := BitBoard(1) << p.EnPassantSquare
+	p.EnPassantSquare = SQ_NULL
 	us, them := p.SideToMove()
-	//isCapture := 1<<m.To&p.AllPieces[them] != 0
-	p.removeAll(them, m.To)
-	p.remove(m.Piece, us, m.From)
+	from := BitBoard(1) << m.From
+	to := BitBoard(1) << m.To
+	isCapture := p.AllPieces[them]&to != 0
+
+	if isCapture {
+		p.removeAll(them, to)
+	}
 
 	switch m.Type {
+	case Promotion:
+		p.remove(Pawn, us, from)
+		p.put(m.PromotionPiece, us, to)
 	case EnPassant:
 		if us == White {
-			p.remove(Pawn, them, m.To+8)
+			p.remove(Pawn, them, to.RotateLeft(8))
 		} else {
-			p.remove(Pawn, them, m.To-8)
+			p.remove(Pawn, them, to.RotateLeft(-8))
 		}
-		p.put(Pawn, us, m.To)
-	case PromotionToKnight:
-		p.put(Knight, us, m.To)
-	case PromotionToBishop:
-		p.put(Bishop, us, m.To)
-	case PromotionToRook:
-		p.put(Rook, us, m.To)
-	case PromotionToQueen:
-		p.put(Queen, us, m.To)
+		p.move(Pawn, us, from, to)
 	case Castle:
+		p.move(m.Piece, us, from, to)
 		switch m.To {
 		case SQ_G1:
-			p.put(King, White, SQ_G1)
-			p.put(Rook, White, SQ_F1)
-			p.remove(Rook, White, SQ_H1)
+			p.CastlingRights ^= WhiteKingSideCastle | WhiteQueenSideCastle
+			p.move(Rook, us, BB_SQ_H1, BB_SQ_F1)
 		case SQ_C1:
-			p.put(King, White, SQ_C1)
-			p.put(Rook, White, SQ_D1)
-			p.remove(Rook, White, SQ_A1)
+			p.CastlingRights ^= WhiteKingSideCastle | WhiteQueenSideCastle
+			p.move(Rook, us, BB_SQ_A1, BB_SQ_D1)
 		case SQ_G8:
-			p.put(King, Black, SQ_G8)
-			p.put(Rook, Black, SQ_F8)
-			p.remove(Rook, Black, SQ_H8)
+			p.CastlingRights ^= BlackKingSideCastle | BlackQueenSideCastle
+			p.move(Rook, us, BB_SQ_H8, BB_SQ_F8)
 		case SQ_C8:
-			p.put(King, Black, SQ_C8)
-			p.put(Rook, Black, SQ_D8)
-			p.remove(Rook, Black, SQ_A8)
+			p.CastlingRights ^= BlackKingSideCastle | BlackQueenSideCastle
+			p.move(Rook, us, BB_SQ_A8, BB_SQ_D8)
 		}
 	default:
-		p.put(m.Piece, us, m.To)
-	}
+		p.move(m.Piece, us, from, to)
+		if m.Piece == Pawn {
+			if m.From-m.To == 16 {
+				p.EnPassantSquare = m.To + 8
+			}
 
-	p.EnPassantSquare = SQ_NULL
-
-	if m.Piece == Pawn {
-		if m.From-m.To == 16 {
-			p.EnPassantSquare = m.To + 8
+			if m.To-m.From == 16 {
+				p.EnPassantSquare = m.To - 8
+			}
 		}
-
-		if m.To-m.From == 16 {
-			p.EnPassantSquare = m.To - 8
-		}
-	}
-
-	if m.Type == Castle && us == White {
-		p.CastlingRights &^= WhiteKingSideCastle
-		p.CastlingRights &^= WhiteQueenSideCastle
-	}
-
-	if m.Type == Castle && us == Black {
-		p.CastlingRights &^= BlackKingSideCastle
-		p.CastlingRights &^= BlackQueenSideCastle
 	}
 
 	if m.From == SQ_A1 || m.To == SQ_A1 {
-		p.CastlingRights &^= WhiteQueenSideCastle
+		p.CastlingRights &= ^WhiteQueenSideCastle
 	}
 
 	if m.From == SQ_H1 || m.To == SQ_H1 {
-		p.CastlingRights &^= WhiteKingSideCastle
+		p.CastlingRights &= ^WhiteKingSideCastle
 	}
 
 	if m.From == SQ_A8 || m.To == SQ_A8 {
-		p.CastlingRights &^= BlackQueenSideCastle
+		p.CastlingRights &= ^BlackQueenSideCastle
 	}
 
 	if m.From == SQ_H8 || m.To == SQ_H8 {
-		p.CastlingRights &^= BlackKingSideCastle
+		p.CastlingRights &= ^BlackKingSideCastle
 	}
 
 	p.WhiteToMove = !p.WhiteToMove
-	p.HalfMoves++
+	if m.Piece != Pawn && !isCapture {
+		p.HalfMoves++
+	}
 
 	if us == Black {
 		p.FullMoves++
@@ -471,47 +467,32 @@ func (p *Position) Do(m Move) { //} Position {
 
 //func (p *Position) Undo () {}
 
-func (p *Position) put(piece Piece, color Color, sq Square) {
-	bit := BitBoard(1) << sq
-	p.Occupied |= bit
-	p.AllPieces[color] |= bit
-	p.Pieces[color][piece] |= bit
+func (p *Position) move(piece Piece, color Color, from, to BitBoard) {
+	fromAndTo := from | to
+	p.Occupied ^= fromAndTo
+	p.AllPieces[color] ^= fromAndTo
+	p.Pieces[color][piece] ^= fromAndTo
 }
 
-func (p *Position) get(color Color, sq Square) Piece {
-	bit := BitBoard(1) << sq
-	if p.Pieces[color][Pawn]&bit != 0 {
-		return Pawn
-	} else if p.Pieces[color][Knight]&bit != 0 {
-		return Knight
-	} else if p.Pieces[color][Bishop]&bit != 0 {
-		return Bishop
-	} else if p.Pieces[color][Rook]&bit != 0 {
-		return Rook
-	} else if p.Pieces[color][Queen]&bit != 0 {
-		return Queen
-	} else if p.Pieces[color][King]&bit != 0 {
-		return King
-	} else {
-		return Empty
-	}
+func (p *Position) put(piece Piece, color Color, sq BitBoard) {
+	p.Occupied |= sq
+	p.AllPieces[color] |= sq
+	p.Pieces[color][piece] |= sq
 }
 
-func (p *Position) remove(piece Piece, color Color, sq Square) {
-	bit := BitBoard(1) << sq
-	p.Occupied &^= bit
-	p.AllPieces[color] &^= bit
-	p.Pieces[color][piece] &^= bit
+func (p *Position) remove(piece Piece, color Color, sq BitBoard) {
+	p.Occupied &^= sq
+	p.AllPieces[color] &^= sq
+	p.Pieces[color][piece] &^= sq
 }
 
-func (p *Position) removeAll(color Color, sq Square) {
-	bit := BitBoard(1) << sq
-	p.Occupied &^= bit
-	p.AllPieces[color] &^= bit
-	p.Pieces[color][Pawn] &^= bit
-	p.Pieces[color][Knight] &^= bit
-	p.Pieces[color][Bishop] &^= bit
-	p.Pieces[color][Rook] &^= bit
-	p.Pieces[color][Queen] &^= bit
+func (p *Position) removeAll(color Color, sq BitBoard) {
+	p.Occupied &^= sq
+	p.AllPieces[color] &^= sq
+	p.Pieces[color][Pawn] &^= sq
+	p.Pieces[color][Knight] &^= sq
+	p.Pieces[color][Bishop] &^= sq
+	p.Pieces[color][Rook] &^= sq
+	p.Pieces[color][Queen] &^= sq
 	//p.Pieces[color][King] &^= bit
 }
