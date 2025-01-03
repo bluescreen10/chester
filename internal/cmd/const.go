@@ -384,10 +384,10 @@ func sqaureToRankAndFile(i int) (int, int) {
 func genMagicnumbers(w io.Writer) {
 
 	fmt.Fprintf(w, "type Magic struct {\n")
+	fmt.Fprintf(w, " \tAttacks []BitBoard\n")
 	fmt.Fprintf(w, " \tMagic BitBoard\n")
 	fmt.Fprintf(w, " \tMask BitBoard\n")
 	fmt.Fprintf(w, " \tShift uint8\n")
-	fmt.Fprintf(w, " \tAttacks []BitBoard\n")
 	fmt.Fprintf(w, "}\n")
 
 	rays := calculateRays()
@@ -414,11 +414,11 @@ func genMagicnumbers(w io.Writer) {
 		}
 		rookBits := RookBits[sq]
 		magic, attacks := findMagicNumber(sq, rookBits, mask, attackFunc)
-		fmt.Fprintf(w, " \n{%d, %d, %d, []BitBoard{\n", magic, mask, 64-rookBits)
+		fmt.Fprintf(w, " \n{[]BitBoard{\n")
 		for i := range attacks {
 			fmt.Fprintf(w, "\t\t%d,\n", attacks[i])
 		}
-		fmt.Fprintf(w, "}},\n")
+		fmt.Fprintf(w, "}, %d, %d, %d},\n", magic, mask, 64-rookBits)
 	}
 	fmt.Fprintf(w, "};\n")
 
@@ -445,11 +445,11 @@ func genMagicnumbers(w io.Writer) {
 		}
 		bishopBits := BishopBits[sq]
 		magic, attacks := findMagicNumber(sq, bishopBits, mask, attackFunc)
-		fmt.Fprintf(w, " \n{%d, %d, %d, []BitBoard{\n", magic, mask, 64-bishopBits)
+		fmt.Fprintf(w, " \n{[]BitBoard{\n")
 		for i := range attacks {
 			fmt.Fprintf(w, "\t\t%d,\n", attacks[i])
 		}
-		fmt.Fprintf(w, "}},\n")
+		fmt.Fprintf(w, "}, %d, %d, %d},\n", magic, mask, 64-bishopBits)
 	}
 	fmt.Fprintf(w, "};\n")
 }
