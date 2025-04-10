@@ -34,3 +34,15 @@ func (s Square) String() string {
 	rank, file := s.RankAndFile()
 	return fmt.Sprintf("%c%d", file+'a', rank+1)
 }
+
+func ParseSquare(s string) (Square, error) {
+	if len(s) != 2 {
+		return SQ_NULL, fmt.Errorf("invalid square: %s", s)
+	}
+	rank := int8(s[1] - '1')
+	file := int8(s[0] - 'a')
+	if rank < 0 || rank > 7 || file < 0 || file > 7 {
+		return SQ_NULL, fmt.Errorf("invalid square: %s", s)
+	}
+	return SquareFromRankAndFile(rank, file), nil
+}

@@ -2,37 +2,48 @@ package main
 
 import (
 	"flag"
-	"fmt"
-	"log"
+	"io"
+	"log/slog"
 	"os"
-	"runtime/pprof"
-	"time"
+	"strings"
 )
 
 const DefaultFEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
-// const DefaultFEN = "r2qkb1r/ppp2ppp/4p1b1/4P3/4p3/2PB1P2/P1P3PP/R1BQK2R w KQkq - 0 11"
-//const DefaultFEN = "rnbqkbnr/pppppp2/8/6pp/8/P6N/1PPPPPPP/RNBQKB1R w KQkq - 0 3"
-
 func main() {
-	cpuprofile := flag.String("cpuprofile", "", "write cpu profile to file")
-	fen := flag.String("fen", DefaultFEN, "FEN string")
-	depth := flag.Int("depth", 6, "depth")
-
+	filename := flag.String("logfile", "uci.log", "log file")
+	level := flag.String("loglevel", "warn", "log level")
 	flag.Parse()
-	if *cpuprofile != "" {
-		f, err := os.Create(*cpuprofile)
-		if err != nil {
-			log.Fatal(err)
+
+	var logfile io.Writer
+	if *filename == "-" {
+		logfile = os.Stderr
+	} else {
+		if *filename == "" {
+			*filename = "uci.log"
 		}
-		pprof.StartCPUProfile(f)
-		defer pprof.StopCPUProfile()
+		logfile, err := os.OpenFile("uci.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			panic(err)
+		}
+		defer logfile.Close()
 	}
-	p, err := Parse(*fen)
-	if err != nil {
-		panic(err)
+
+	var logLevel slog.Level
+
+	switch strings.ToLower(*level) {
+	case "debug":
+		logLevel = slog.LevelDebug
+	case "info":
+		logLevel = slog.LevelInfo
+	case "warn":
+		logLevel = slog.LevelWarn
+	case "error":
+		logLevel = slog.LevelError
+	default:
+		logLevel = slog.LevelWarn
 	}
-	start := time.Now()
-	nodes := Perft(p, *depth, os.Stdout)
-	fmt.Printf("Nodes(depth = %d): %d in %s \n", *depth, nodes, time.Since(start))
+
+	logger := slog.New(slog.NewTextHandler(logfile, &slog.HandlerOptions{Level: logLevel}))
+	startUCI(logger)
 }

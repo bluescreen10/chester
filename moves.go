@@ -43,6 +43,31 @@ var pawnConfig [2]config = [2]config{
 	{8, 7, 9, Rank_1, Rank_6, Rank_4},
 }
 
+func ParseMove(m string, p Position) (Move, error) {
+	from := SquareFromString(m[:2])
+	to := SquareFromString(m[2:4])
+	if len(m) == 5 {
+		switch m[4] {
+		case 'b':
+			return Move{Piece: Pawn, From: from, To: to, Type: Promotion, PromotionPiece: Bishop}, nil
+		case 'n':
+			return Move{Piece: Pawn, From: from, To: to, Type: Promotion, PromotionPiece: Knight}, nil
+		case 'r':
+			return Move{Piece: Pawn, From: from, To: to, Type: Promotion, PromotionPiece: Rook}, nil
+		case 'q':
+			return Move{Piece: Pawn, From: from, To: to, Type: Promotion, PromotionPiece: Queen}, nil
+		default:
+			return Move{}, fmt.Errorf("invalid move suffix")
+		}
+	} else {
+		piece := p.Get(from)
+		if piece == Empty {
+			return Move{}, fmt.Errorf("no piece at from square: %s", from)
+		}
+		return Move{Piece: piece, From: from, To: to}, nil
+	}
+}
+
 func (m Move) String() string {
 	fromRank, fromFile := m.From.RankAndFile()
 	toRank, toFile := m.To.RankAndFile()

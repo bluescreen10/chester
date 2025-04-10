@@ -1,3 +1,4 @@
 *.prof
 .vscode
 pawned
+uci.log

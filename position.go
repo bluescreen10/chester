@@ -496,3 +496,37 @@ func (p *Position) removeAll(color Color, sq BitBoard) {
 	p.Pieces[color][Queen] &^= sq
 	//p.Pieces[color][King] &^= bit
 }
+
+func (p Position) Get(sq Square) Piece {
+	bit := BitBoard(1) << sq
+	if p.WhiteToMove {
+		if p.Pieces[White][Pawn]&bit != 0 {
+			return Pawn
+		} else if p.Pieces[White][Knight]&bit != 0 {
+			return Knight
+		} else if p.Pieces[White][Bishop]&bit != 0 {
+			return Bishop
+		} else if p.Pieces[White][Rook]&bit != 0 {
+			return Rook
+		} else if p.Pieces[White][Queen]&bit != 0 {
+			return Queen
+		} else if p.Pieces[White][King]&bit != 0 {
+			return King
+		}
+	} else {
+		if p.Pieces[Black][Pawn]&bit != 0 {
+			return Pawn
+		} else if p.Pieces[Black][Knight]&bit != 0 {
+			return Knight
+		} else if p.Pieces[Black][Bishop]&bit != 0 {
+			return Bishop
+		} else if p.Pieces[Black][Rook]&bit != 0 {
+			return Rook
+		} else if p.Pieces[Black][Queen]&bit != 0 {
+			return Queen
+		} else if p.Pieces[Black][King]&bit != 0 {
+			return King
+		}
+	}
+	return Empty
+}
