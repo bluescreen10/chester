@@ -30,7 +30,7 @@ func TestUpdateWhiteCastlingRights(t *testing.T) {
 		},
 		{
 			fen:      "4k3/8/8/8/3b4/8/8/R3K2R w KQ - 0 1",
-			move:     pawned.Move{From: pawned.SQ_E1, To: pawned.SQ_F1, Type: pawned.Castle, Piece: pawned.King},
+			move:     pawned.Move{From: pawned.SQ_E1, To: pawned.SQ_F1, Piece: pawned.King},
 			expected: []bool{false, false},
 		},
 		{
@@ -108,19 +108,19 @@ func TestEnPassant(t *testing.T) {
 	}{
 		{
 			fen:             "4k3/8/8/8/3Pp3/8/8/R3K2R b KQ d3 0 1",
-			after:           "4k3/8/8/8/8/3p4/8/R3K2R w KQ - 1 2",
+			after:           "4k3/8/8/8/8/3p4/8/R3K2R w KQ - 0 2",
 			move:            pawned.Move{From: pawned.SQ_E4, To: pawned.SQ_D3, Piece: pawned.Pawn, Type: pawned.EnPassant},
 			enPassantSquare: pawned.SQ_NULL,
 		},
 		{
 			fen:             "4k3/8/8/8/4p3/8/3P4/R3K2R w KQ - 0 1",
-			after:           "4k3/8/8/8/3Pp3/8/8/R3K2R b KQ d3 1 1",
+			after:           "4k3/8/8/8/3Pp3/8/8/R3K2R b KQ d3 0 1",
 			move:            pawned.Move{From: pawned.SQ_D2, To: pawned.SQ_D4, Piece: pawned.Pawn},
 			enPassantSquare: pawned.SQ_D3,
 		},
 		{
 			fen:             "rnbqkb1r/pppppppp/7n/P7/8/8/1PPPPPPP/RNBQKBNR b KQkq - 0 3",
-			after:           "rnbqkb1r/p1pppppp/7n/Pp6/8/8/1PPPPPPP/RNBQKBNR w KQkq b6 1 4",
+			after:           "rnbqkb1r/p1pppppp/7n/Pp6/8/8/1PPPPPPP/RNBQKBNR w KQkq b6 0 4",
 			move:            pawned.Move{From: pawned.SQ_B7, To: pawned.SQ_B5, Piece: pawned.Pawn},
 			enPassantSquare: pawned.SQ_B6,
 		},

@@ -437,19 +437,19 @@ func (p *Position) Do(m Move) {
 		}
 	}
 
-	if m.From == SQ_A1 || m.To == SQ_A1 {
+	if m.From == SQ_A1 || m.To == SQ_A1 || m.From == SQ_E1 {
 		p.CastlingRights &= ^WhiteQueenSideCastle
 	}
 
-	if m.From == SQ_H1 || m.To == SQ_H1 {
+	if m.From == SQ_H1 || m.To == SQ_H1 || m.From == SQ_E1 {
 		p.CastlingRights &= ^WhiteKingSideCastle
 	}
 
-	if m.From == SQ_A8 || m.To == SQ_A8 {
+	if m.From == SQ_A8 || m.To == SQ_A8 || m.From == SQ_E8 {
 		p.CastlingRights &= ^BlackQueenSideCastle
 	}
 
-	if m.From == SQ_H8 || m.To == SQ_H8 {
+	if m.From == SQ_H8 || m.To == SQ_H8 || m.From == SQ_E8 {
 		p.CastlingRights &= ^BlackKingSideCastle
 	}
 
