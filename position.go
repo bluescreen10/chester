@@ -78,7 +78,6 @@ type Position struct {
 	Pieces    [Color(2)][Piece(6)]BitBoard
 	AllPieces [Color(2)]BitBoard
 	Occupied  BitBoard
-	//State     *State
 
 	WhiteToMove     bool
 	EnPassantSquare Square
@@ -384,7 +383,7 @@ const (
 	BB_SQ_D8 BitBoard = 1 << SQ_D8
 )
 
-func (p *Position) Do(m Move) {
+func Do(p *Position, m Move) {
 
 	//enPassant := BitBoard(1) << p.EnPassantSquare
 	p.EnPassantSquare = SQ_NULL
@@ -458,7 +457,7 @@ func (p *Position) Do(m Move) {
 		p.HalfMoves++
 	}
 
-	if us == Black {
+	if !p.WhiteToMove {
 		p.FullMoves++
 	}
 

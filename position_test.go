@@ -66,7 +66,7 @@ func TestUpdateWhiteCastlingRights(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		pos.Do(test.move)
+		pawned.Do(&pos, test.move)
 		if got := pos.CanWhiteCastleKingSide(); got != test.expected[0] {
 			t.Errorf("Do(%s) failed to update white king side castling rights expected %v got %v", test.move, test.expected[0], got)
 		}
@@ -89,7 +89,7 @@ func TestUpdateBlackCastlingRights(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		p.Do(test.move)
+		pawned.Do(&p, test.move)
 		if got := p.CanBlackCastleKingSide(); got != test.expected[0] {
 			t.Errorf("Do(%s) failed to update black king side castling rights expected %v got %v", test.move, test.expected[0], got)
 		}
@@ -132,7 +132,7 @@ func TestEnPassant(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		p.Do(test.move)
+		pawned.Do(&p, test.move)
 		if got := p.EnPassantSquare; got != test.enPassantSquare {
 			t.Errorf("Do(%s) failed to update en passant square expected %s got %s", test.move, test.enPassantSquare, got)
 		}

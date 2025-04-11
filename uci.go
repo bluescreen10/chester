@@ -22,16 +22,17 @@ type UCIServer struct {
 	bestMove       Move
 	isCPUProfiling bool
 	CPUProfileFile *os.File
+	isDebugLogging bool
 }
 
-func startUCI(logger *slog.Logger) {
+func startUCI() {
 	pos, _ := Parse(DefaultFEN)
-	uci := &UCIServer{logger: logger, pos: pos, bestMove: Move{}}
+	uci := &UCIServer{pos: pos, bestMove: Move{}}
 	uci.Start()
 }
 
 func (s *UCIServer) Start() {
-	s.logger.Info("Starting UCI server...")
+	s.info("starting uci server...")
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
@@ -43,14 +44,14 @@ func (s *UCIServer) Start() {
 
 	for scanner.Scan() {
 		line := scanner.Text()
-		s.logger.Debug(fmt.Sprintf("Received: %s", line))
+		s.debug("received: %s", line)
 
 		args := strings.Split(line, " ")
-		s.logger.Debug(fmt.Sprintf("Command: %s Args: %v", args[0], args[1:]))
+		s.debug("command: %s args: %v", args[0], args[1:])
 
 		switch args[0] {
 		case "quit":
-			s.logger.Info("Quitting UCI server...")
+			s.info("quitting uci server...")
 			return
 		case "uci":
 			s.handleUCI()
@@ -68,8 +69,10 @@ func (s *UCIServer) Start() {
 			s.handlePerft(args[1:])
 		case "cpuprofile":
 			s.handleCPUProfile(args[1:])
+		case "debug":
+			s.handleDebug(args[1:])
 		default:
-			s.logger.Error(fmt.Sprintf("Unknown command: %s", args[0]))
+			s.error("unknown command: %s", args[0])
 		}
 	}
 }
@@ -77,19 +80,32 @@ func (s *UCIServer) Start() {
 func (s *UCIServer) Write(msg []byte) (int, error) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
+	return os.Stdout.Write(msg)
+}
 
-	s.logger.Debug(fmt.Sprintf("Sending: %s", msg))
-	n, err := os.Stdout.Write(msg)
-	if err != nil {
-		s.logger.Error(fmt.Sprintf("Error writing to stdout: %s", err))
+func (s *UCIServer) WriteString(msg string, args ...any) {
+	s.Write([]byte(fmt.Sprintf(msg+"\n", args...)))
+}
+
+func (s *UCIServer) debug(msg string, args ...any) {
+	if !s.isDebugLogging {
+		return
 	}
-	return n, err
+	s.info("debug: "+msg, args...)
+}
+
+func (s *UCIServer) info(msg string, args ...any) {
+	s.WriteString("info string "+msg, args...)
+}
+
+func (s *UCIServer) error(msg string, args ...any) {
+	s.info("error: "+msg, args...)
 }
 
 func (s *UCIServer) handleUCI() {
-	fmt.Fprintf(s, "id name Chester")
-	fmt.Fprintf(s, "id author Mariano Wahlmann")
-	fmt.Fprintf(s, "uciok")
+	s.WriteString("id name %s", BotName)
+	s.WriteString("id author %s", Author)
+	s.WriteString("uciok")
 }
 
 func (s *UCIServer) handleUCINewGame() {
@@ -98,7 +114,7 @@ func (s *UCIServer) handleUCINewGame() {
 
 func (s *UCIServer) handlePosition(args []string) {
 	if len(args) < 2 {
-		s.logger.Error("Position command requires at least 2 arguments")
+		s.error("position command requires at least 2 arguments")
 		return
 	}
 
@@ -110,30 +126,29 @@ func (s *UCIServer) handlePosition(args []string) {
 		fen := strings.Join(args[2:6], " ")
 		pos, err := Parse(fen)
 		if err != nil {
-			s.logger.Error(fmt.Sprintf("Error parsing FEN: %s", err))
+			s.error("error parsing fen: %s", err)
 			return
 		}
 		s.pos = pos
 		s.bestMove = Move{}
 		args = args[6:]
 	default:
-		s.logger.Error(fmt.Sprintf("Unknown position argument: %s", args[1]))
+		s.error("unknown position argument: %s", args[1])
 	}
 
 	p := &s.pos
 
-	s.logger.Debug(fmt.Sprintf("Args: %v", args))
+	s.debug("args: %v", args)
 
 	if args[0] == "moves" {
 		for _, m := range args[1:] {
 			move, err := ParseMove(m, *p)
 			if err != nil {
-				s.logger.Error(fmt.Sprintf("Error parsing move: %s", err))
-				s.logger.Error(s.pos.String())
+				s.error("error parsing move: %s", err)
 				return
 			}
-			p.Do(move)
-			s.logger.Debug(fmt.Sprintf("Position: %s", s.pos.String()))
+			Do(p, move)
+			s.debug("position: %s", s.pos.String())
 		}
 	}
 	s.pos = *p
@@ -142,8 +157,8 @@ func (s *UCIServer) handlePosition(args []string) {
 }
 
 func (s *UCIServer) handleGo(args []string) {
-	if len(args) < 2 {
-		s.logger.Error("Go command requires at least 2 arguments")
+	if len(args) < 1 {
+		s.error("go command requires at least 2 arguments")
 		return
 	}
 
@@ -151,23 +166,20 @@ func (s *UCIServer) handleGo(args []string) {
 	LegalMoves(&moves, &s.pos)
 
 	if len(moves) == 0 {
-		s.logger.Error("No legal moves available")
 		return
 	}
 
-	fmt.Printf("info depth 1 pv %s\n", moves[0])
-
-	s.logger.Debug(fmt.Sprintf("Legal moves: %v", moves))
+	s.WriteString("info depth 1 pv %s", moves[0])
 	s.bestMove = moves[0]
 }
 
 func (s *UCIServer) handleIsReady() {
-	fmt.Fprintf(s, "readyok")
+	s.WriteString("readyok")
 }
 
 func (s *UCIServer) handleStop() {
 	if s.bestMove != (Move{}) {
-		fmt.Fprintf(s, "bestmove %s\n", s.bestMove)
+		s.WriteString("bestmove %s", s.bestMove)
 	}
 }
 
@@ -178,7 +190,7 @@ func (s *UCIServer) handlePerft(args []string) {
 		if d, err := strconv.Atoi(args[0]); err == nil {
 			depth = d
 		} else {
-			s.logger.Error(fmt.Sprintf("Error parsing depth: %s", err))
+			s.error("error parsing depth: %s", err)
 			return
 		}
 	}
@@ -186,7 +198,7 @@ func (s *UCIServer) handlePerft(args []string) {
 	go func() {
 		start := time.Now()
 		output := bytes.Buffer{}
-		nodes := Perft(s.pos, depth, s)
+		nodes := Perft(&s.pos, depth, s)
 		duration := time.Since(start)
 		fmt.Fprintf(s, "%s\nperft %d in %s\n", output.String(), nodes, duration)
 	}()
@@ -194,7 +206,7 @@ func (s *UCIServer) handlePerft(args []string) {
 
 func (s *UCIServer) handleCPUProfile(args []string) {
 	if s.isCPUProfiling {
-		fmt.Fprintf(s, "CPU profiling stopped\n")
+		s.info("cpu profiling stopped")
 		pprof.StopCPUProfile()
 		return
 	}
@@ -206,20 +218,35 @@ func (s *UCIServer) handleCPUProfile(args []string) {
 
 	file, err := os.Create(filename)
 	if err != nil {
-		s.logger.Error(fmt.Sprintf("Error creating profile file: %s", err))
+		s.error("error creating profile file: %s", err)
 		return
 	}
 
-	fmt.Fprintf(s, "CPU profiling started\n")
+	s.info("cpu profiling started")
 	pprof.StartCPUProfile(file)
 	s.CPUProfileFile = file
 	s.isCPUProfiling = true
 }
 
+func (s *UCIServer) handleDebug(args []string) {
+	if len(args) == 0 {
+		s.isDebugLogging = !s.isDebugLogging
+		return
+	}
+
+	if args[0] == "off" && s.isDebugLogging {
+		s.isDebugLogging = false
+	}
+
+	if args[0] == "on" && !s.isDebugLogging {
+		s.isDebugLogging = true
+	}
+}
+
 func (s *UCIServer) resetPosition() {
 	pos, err := Parse(DefaultFEN)
 	if err != nil {
-		s.logger.Error(fmt.Sprintf("Error parsing FEN: %s", err))
+		s.error("error parsing fen: %s", err)
 	}
 	s.pos = pos
 	s.bestMove = Move{}
