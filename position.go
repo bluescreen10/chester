@@ -452,7 +452,6 @@ func Do(p *Position, m Move) {
 		p.CastlingRights &= ^BlackKingSideCastle
 	}
 
-	p.WhiteToMove = !p.WhiteToMove
 	if m.Piece != Pawn && !isCapture {
 		p.HalfMoves++
 	}
@@ -461,6 +460,7 @@ func Do(p *Position, m Move) {
 		p.FullMoves++
 	}
 
+	p.WhiteToMove = !p.WhiteToMove
 	//return new
 }
 

@@ -29,7 +29,7 @@ func TestMoveGen(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		if got := pawned.Perft(p, test.depth, os.Stdout); got != test.nodes {
+		if got := pawned.Perft(&p, test.depth, os.Stdout); got != test.nodes {
 			t.Fatalf("Perft(%d) = %d, want %d", test.depth, got, test.nodes)
 		}
 	}
@@ -224,6 +224,13 @@ func TestBlackPawnMoves(t *testing.T) {
 			expected: []string{
 				"b7b5", "b8c6", "b8d7", "c7c6", "c8d7",
 				"d8d7",
+			},
+		},
+
+		{
+			fen: "6Q1/N7/5b2/1P4k1/3Q4/8/p7/3K4 b - - 2 58",
+			expected: []string{
+				"f6g7", "g5f5", "g5h5", "g5h6",
 			},
 		},
 	}

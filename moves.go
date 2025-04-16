@@ -97,7 +97,7 @@ var movesPool = sync.Pool{
 	},
 }
 
-func LegalMoves(moves *[]Move, pos *Position) {
+func LegalMoves(moves *[]Move, pos *Position) bool {
 	us, them := pos.SideToMove()
 	king := pos.Pieces[us][King]
 	kingSq, _ := king.PopLSB()
@@ -108,6 +108,7 @@ func LegalMoves(moves *[]Move, pos *Position) {
 	switch c := checkers.OnesCount(); {
 	case c >= 2:
 		genKingMoves(moves, pos, us, them, false)
+		return true
 	case c == 1:
 		captureMask := checkers
 		pushMask := EmptyBoard
@@ -123,6 +124,7 @@ func LegalMoves(moves *[]Move, pos *Position) {
 		genRookMoves(moves, pos, us, captureMask|pushMask, pinnedStraight, pinnedStraight)
 		genQueenMoves(moves, pos, us, captureMask|pushMask, pinnedStraight, pinnedDiagonal)
 		genKingMoves(moves, pos, us, them, false)
+		return true
 	default:
 		genPawnMoves(moves, pos, us, them, FullBoard, pinnedStraight, pinnedDiagonal, kingSq)
 		genKnightMoves(moves, pos, us, FullBoard, pinned)
@@ -130,6 +132,7 @@ func LegalMoves(moves *[]Move, pos *Position) {
 		genRookMoves(moves, pos, us, FullBoard, pinnedStraight, pinnedDiagonal)
 		genQueenMoves(moves, pos, us, FullBoard, pinnedStraight, pinnedDiagonal)
 		genKingMoves(moves, pos, us, them, true)
+		return false
 	}
 }
 
@@ -310,7 +313,7 @@ func genForwardMoves(moves *[]Move, cfg config, pawns, occupied BitBoard, moveMa
 		*moves = append(*moves, Move{Piece: Pawn, From: from, To: to})
 	}
 
-	for pushes := singlePushes & cfg.promotionRank; pushes != 0; {
+	for pushes := singlePushes & moveMask & cfg.promotionRank; pushes != 0; {
 		var to Square
 		to, pushes = pushes.PopLSB()
 		from := to - Square(cfg.singlePushes)

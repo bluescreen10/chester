@@ -3,8 +3,8 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
-	"log/slog"
 	"os"
 	"os/signal"
 	"runtime/pprof"
@@ -16,18 +16,18 @@ import (
 )
 
 type UCIServer struct {
-	logger         *slog.Logger
 	mutex          sync.Mutex
 	pos            Position
-	bestMove       Move
+	bestMove       string
 	isCPUProfiling bool
 	CPUProfileFile *os.File
 	isDebugLogging bool
+	stopFunc       func()
 }
 
 func startUCI() {
 	pos, _ := Parse(DefaultFEN)
-	uci := &UCIServer{pos: pos, bestMove: Move{}}
+	uci := &UCIServer{pos: pos}
 	uci.Start()
 }
 
@@ -113,25 +113,35 @@ func (s *UCIServer) handleUCINewGame() {
 }
 
 func (s *UCIServer) handlePosition(args []string) {
-	if len(args) < 2 {
+	if len(args) < 1 {
 		s.error("position command requires at least 2 arguments")
 		return
 	}
 
-	switch args[1] {
+	switch args[0] {
 	case "startpos":
 		s.resetPosition()
-		args = args[2:]
+		if len(args) > 1 {
+			args = args[1:]
+		} else {
+			args = nil
+		}
 	case "fen":
-		fen := strings.Join(args[2:6], " ")
+		var i int
+		for i = 1; i < len(args); i++ {
+			if args[i] == "moves" {
+				break
+			}
+		}
+
+		fen := strings.Join(args[1:i], " ")
 		pos, err := Parse(fen)
 		if err != nil {
 			s.error("error parsing fen: %s", err)
 			return
 		}
 		s.pos = pos
-		s.bestMove = Move{}
-		args = args[6:]
+		args = args[i:]
 	default:
 		s.error("unknown position argument: %s", args[1])
 	}
@@ -140,7 +150,7 @@ func (s *UCIServer) handlePosition(args []string) {
 
 	s.debug("args: %v", args)
 
-	if args[0] == "moves" {
+	if len(args) > 0 && args[0] == "moves" {
 		for _, m := range args[1:] {
 			move, err := ParseMove(m, *p)
 			if err != nil {
@@ -152,8 +162,6 @@ func (s *UCIServer) handlePosition(args []string) {
 		}
 	}
 	s.pos = *p
-
-	s.bestMove = Move{}
 }
 
 func (s *UCIServer) handleGo(args []string) {
@@ -162,15 +170,16 @@ func (s *UCIServer) handleGo(args []string) {
 		return
 	}
 
-	var moves []Move
-	LegalMoves(&moves, &s.pos)
+	ctx, f := context.WithCancel(context.Background())
+	s.stopFunc = f
 
-	if len(moves) == 0 {
-		return
-	}
-
-	s.WriteString("info depth 1 pv %s", moves[0])
-	s.bestMove = moves[0]
+	go func() {
+		ch := SearchBestMove(ctx, &s.pos)
+		for e := range ch {
+			s.info("depth %d score cp %d pv %s", e.depth, e.score, e.best)
+			s.bestMove = e.best
+		}
+	}()
 }
 
 func (s *UCIServer) handleIsReady() {
@@ -178,7 +187,12 @@ func (s *UCIServer) handleIsReady() {
 }
 
 func (s *UCIServer) handleStop() {
-	if s.bestMove != (Move{}) {
+	if s.stopFunc != nil {
+		s.stopFunc()
+		s.stopFunc = nil
+	}
+
+	if s.bestMove != "" {
 		s.WriteString("bestmove %s", s.bestMove)
 	}
 }
@@ -249,5 +263,4 @@ func (s *UCIServer) resetPosition() {
 		s.error("error parsing fen: %s", err)
 	}
 	s.pos = pos
-	s.bestMove = Move{}
 }
