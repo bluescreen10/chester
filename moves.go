@@ -25,7 +25,31 @@ const (
 type Move struct {
 	Piece, PromotionPiece Piece
 	Type                  MoveType
-	From, To              Square
+	from, to              Square
+}
+
+func NewMove(from, to Square, piece Piece) Move {
+	return Move{Piece: piece, from: from, to: to}
+}
+
+func NewEnPassantMove(from, to Square) Move {
+	return Move{Piece: Pawn, from: from, to: to, Type: EnPassant}
+}
+
+func NewCastleMove(from, to Square) Move {
+	return Move{Piece: King, from: from, to: to, Type: Castle}
+}
+
+func NewPromotionMove(from, to Square, promotion Piece) Move {
+	return Move{Piece: Pawn, from: from, to: to, PromotionPiece: promotion, Type: Promotion}
+}
+
+func (m Move) From() Square {
+	return m.from
+}
+
+func (m Move) To() Square {
+	return m.to
 }
 
 type config struct {
@@ -48,13 +72,13 @@ func ParseMove(m string, p Position) (Move, error) {
 	if len(m) == 5 {
 		switch m[4] {
 		case 'b':
-			return Move{Piece: Pawn, From: from, To: to, Type: Promotion, PromotionPiece: Bishop}, nil
+			return NewPromotionMove(from, to, Bishop), nil
 		case 'n':
-			return Move{Piece: Pawn, From: from, To: to, Type: Promotion, PromotionPiece: Knight}, nil
+			return NewPromotionMove(from, to, Knight), nil
 		case 'r':
-			return Move{Piece: Pawn, From: from, To: to, Type: Promotion, PromotionPiece: Rook}, nil
+			return NewPromotionMove(from, to, Rook), nil
 		case 'q':
-			return Move{Piece: Pawn, From: from, To: to, Type: Promotion, PromotionPiece: Queen}, nil
+			return NewPromotionMove(from, to, Queen), nil
 		default:
 			return Move{}, fmt.Errorf("invalid move suffix")
 		}
@@ -63,13 +87,13 @@ func ParseMove(m string, p Position) (Move, error) {
 		if piece == Empty {
 			return Move{}, fmt.Errorf("no piece at from square: %s", from)
 		}
-		return Move{Piece: piece, From: from, To: to}, nil
+		return NewMove(from, to, piece), nil
 	}
 }
 
 func (m Move) String() string {
-	fromRank, fromFile := m.From.RankAndFile()
-	toRank, toFile := m.To.RankAndFile()
+	fromRank, fromFile := m.From().RankAndFile()
+	toRank, toFile := m.To().RankAndFile()
 
 	suffix := ""
 
@@ -310,7 +334,7 @@ func genForwardMoves(moves *[]Move, cfg config, pawns, occupied BitBoard, moveMa
 		var to Square
 		to, pushes = pushes.PopLSB()
 		from := to - Square(cfg.singlePushes)
-		*moves = append(*moves, Move{Piece: Pawn, From: from, To: to})
+		*moves = append(*moves, NewMove(from, to, Pawn))
 	}
 
 	for pushes := singlePushes & moveMask & cfg.promotionRank; pushes != 0; {
@@ -318,10 +342,10 @@ func genForwardMoves(moves *[]Move, cfg config, pawns, occupied BitBoard, moveMa
 		to, pushes = pushes.PopLSB()
 		from := to - Square(cfg.singlePushes)
 		*moves = append(*moves,
-			Move{Piece: Pawn, From: from, To: to, Type: Promotion, PromotionPiece: Queen},
-			Move{Piece: Pawn, From: from, To: to, Type: Promotion, PromotionPiece: Rook},
-			Move{Piece: Pawn, From: from, To: to, Type: Promotion, PromotionPiece: Bishop},
-			Move{Piece: Pawn, From: from, To: to, Type: Promotion, PromotionPiece: Knight},
+			NewPromotionMove(from, to, Queen),
+			NewPromotionMove(from, to, Rook),
+			NewPromotionMove(from, to, Bishop),
+			NewPromotionMove(from, to, Knight),
 		)
 	}
 
@@ -330,7 +354,7 @@ func genForwardMoves(moves *[]Move, cfg config, pawns, occupied BitBoard, moveMa
 		var to Square
 		to, doublePushes = doublePushes.PopLSB()
 		from := to - Square(2*cfg.singlePushes)
-		*moves = append(*moves, Move{Piece: Pawn, From: from, To: to})
+		*moves = append(*moves, NewMove(from, to, Pawn))
 	}
 }
 
@@ -345,7 +369,7 @@ func genLeftAttackMoves(moves *[]Move, cfg config, pawns, enemies BitBoard, move
 		var to Square
 		to, attacks = attacks.PopLSB()
 		from := to - Square(cfg.leftAttacks)
-		*moves = append(*moves, Move{Piece: Pawn, From: from, To: to})
+		*moves = append(*moves, NewMove(from, to, Pawn))
 	}
 
 	for attacks := pawnAttacks & cfg.promotionRank; attacks != 0; {
@@ -354,10 +378,10 @@ func genLeftAttackMoves(moves *[]Move, cfg config, pawns, enemies BitBoard, move
 		from := to - Square(cfg.leftAttacks)
 
 		*moves = append(*moves,
-			Move{Piece: Pawn, From: from, To: to, Type: Promotion, PromotionPiece: Queen},
-			Move{Piece: Pawn, From: from, To: to, Type: Promotion, PromotionPiece: Rook},
-			Move{Piece: Pawn, From: from, To: to, Type: Promotion, PromotionPiece: Bishop},
-			Move{Piece: Pawn, From: from, To: to, Type: Promotion, PromotionPiece: Knight},
+			NewPromotionMove(from, to, Queen),
+			NewPromotionMove(from, to, Rook),
+			NewPromotionMove(from, to, Bishop),
+			NewPromotionMove(from, to, Knight),
 		)
 
 	}
@@ -374,7 +398,7 @@ func genRightAttackMoves(moves *[]Move, cfg config, pawns, enemies BitBoard, mov
 		var to Square
 		to, attacks = attacks.PopLSB()
 		from := to - Square(cfg.rightAttacks)
-		*moves = append(*moves, Move{Piece: Pawn, From: from, To: to})
+		*moves = append(*moves, NewMove(from, to, Pawn))
 	}
 
 	for attacks := pawnAttacks & cfg.promotionRank; attacks != 0; {
@@ -383,10 +407,10 @@ func genRightAttackMoves(moves *[]Move, cfg config, pawns, enemies BitBoard, mov
 		from := to - Square(cfg.rightAttacks)
 
 		*moves = append(*moves,
-			Move{Piece: Pawn, From: from, To: to, Type: Promotion, PromotionPiece: Queen},
-			Move{Piece: Pawn, From: from, To: to, Type: Promotion, PromotionPiece: Rook},
-			Move{Piece: Pawn, From: from, To: to, Type: Promotion, PromotionPiece: Bishop},
-			Move{Piece: Pawn, From: from, To: to, Type: Promotion, PromotionPiece: Knight},
+			NewPromotionMove(from, to, Queen),
+			NewPromotionMove(from, to, Rook),
+			NewPromotionMove(from, to, Bishop),
+			NewPromotionMove(from, to, Knight),
 		)
 
 	}
@@ -402,13 +426,13 @@ func genEnPassantMoves(moves *[]Move, cfg config, pawns, occupied, enPassantFile
 		path := genRookAttacks(kingSq, occupiedWithoutPawns)
 		potentialCheckers := enemyQueenOrRooks & path
 		if potentialCheckers == 0 {
-			*moves = append(*moves, Move{Piece: Pawn, From: from, To: sq, Type: EnPassant})
+			*moves = append(*moves, NewEnPassantMove(from, sq))
 		} else {
 			for potentialCheckers != 0 {
 				var checker Square
 				checker, potentialCheckers = potentialCheckers.PopLSB()
 				if squaresBetween[kingSq][checker]&occupiedWithoutPawns != 0 {
-					*moves = append(*moves, Move{Piece: Pawn, From: from, To: sq, Type: EnPassant})
+					*moves = append(*moves, NewEnPassantMove(from, sq))
 				}
 			}
 		}
@@ -422,13 +446,13 @@ func genEnPassantMoves(moves *[]Move, cfg config, pawns, occupied, enPassantFile
 		path := genRookAttacks(kingSq, occupiedWithoutPawns)
 		potentialCheckers := enemyQueenOrRooks & path
 		if potentialCheckers == 0 {
-			*moves = append(*moves, Move{Piece: Pawn, From: from, To: sq, Type: EnPassant})
+			*moves = append(*moves, NewEnPassantMove(from, sq))
 		} else {
 			for potentialCheckers != 0 {
 				var checker Square
 				checker, potentialCheckers = potentialCheckers.PopLSB()
 				if squaresBetween[kingSq][checker]&occupiedWithoutPawns != 0 {
-					*moves = append(*moves, Move{Piece: Pawn, From: from, To: sq, Type: EnPassant})
+					*moves = append(*moves, NewEnPassantMove(from, sq))
 				}
 			}
 		}
@@ -447,7 +471,7 @@ func genKnightMoves(moves *[]Move, p *Position, us Color, moveMask, pinned BitBo
 		for targets != 0 {
 			var to Square
 			to, targets = targets.PopLSB()
-			*moves = append(*moves, Move{Piece: Knight, From: from, To: to})
+			*moves = append(*moves, NewMove(from, to, Knight))
 		}
 
 	}
@@ -466,7 +490,7 @@ func genBishopMoves(moves *[]Move, p *Position, us Color, moveMask, pinnedStraig
 		for targets != 0 {
 			var to Square
 			to, targets = targets.PopLSB()
-			*moves = append(*moves, Move{Piece: Bishop, From: from, To: to})
+			*moves = append(*moves, NewMove(from, to, Bishop))
 		}
 	}
 
@@ -478,7 +502,7 @@ func genBishopMoves(moves *[]Move, p *Position, us Color, moveMask, pinnedStraig
 		for targets != 0 {
 			var to Square
 			to, targets = targets.PopLSB()
-			*moves = append(*moves, Move{Piece: Bishop, From: from, To: to})
+			*moves = append(*moves, NewMove(from, to, Bishop))
 		}
 	}
 }
@@ -496,7 +520,7 @@ func genRookMoves(moves *[]Move, p *Position, us Color, moveMask, pinnedStraight
 		for targets != 0 {
 			var to Square
 			to, targets = targets.PopLSB()
-			*moves = append(*moves, Move{Piece: Rook, From: from, To: to})
+			*moves = append(*moves, NewMove(from, to, Rook))
 		}
 	}
 
@@ -508,7 +532,7 @@ func genRookMoves(moves *[]Move, p *Position, us Color, moveMask, pinnedStraight
 		for targets != 0 {
 			var to Square
 			to, targets = targets.PopLSB()
-			*moves = append(*moves, Move{Piece: Rook, From: from, To: to})
+			*moves = append(*moves, NewMove(from, to, Rook))
 		}
 	}
 }
@@ -527,7 +551,7 @@ func genQueenMoves(moves *[]Move, p *Position, us Color, moveMask, pinnedStraigh
 		for targets != 0 {
 			var to Square
 			to, targets = targets.PopLSB()
-			*moves = append(*moves, Move{Piece: Queen, From: from, To: to})
+			*moves = append(*moves, NewMove(from, to, Queen))
 		}
 	}
 
@@ -539,7 +563,7 @@ func genQueenMoves(moves *[]Move, p *Position, us Color, moveMask, pinnedStraigh
 		for targets != 0 {
 			var to Square
 			to, targets = targets.PopLSB()
-			*moves = append(*moves, Move{Piece: Queen, From: from, To: to})
+			*moves = append(*moves, NewMove(from, to, Queen))
 		}
 	}
 
@@ -551,7 +575,7 @@ func genQueenMoves(moves *[]Move, p *Position, us Color, moveMask, pinnedStraigh
 		for targets != 0 {
 			var to Square
 			to, targets = targets.PopLSB()
-			*moves = append(*moves, Move{Piece: Queen, From: from, To: to})
+			*moves = append(*moves, NewMove(from, to, Queen))
 		}
 	}
 }
@@ -574,7 +598,7 @@ func genKingMoves(moves *[]Move, p *Position, us, them Color, castling bool) {
 	for targets := potentialTargets &^ (enemyKing | attacked); targets != 0; {
 		var to Square
 		to, targets = targets.PopLSB()
-		*moves = append(*moves, Move{Piece: King, From: from, To: to})
+		*moves = append(*moves, NewMove(from, to, King))
 	}
 
 	if !castling {
@@ -588,7 +612,7 @@ func genKingMoves(moves *[]Move, p *Position, us, them Color, castling bool) {
 			mustNotBeAttacked := squaresBetween[SQ_D1][SQ_H1]
 
 			if emptySquares&occupied == 0 && mustNotBeAttacked&attacked == 0 {
-				*moves = append(*moves, Move{Piece: King, Type: Castle, From: SQ_E1, To: SQ_G1})
+				*moves = append(*moves, NewCastleMove(SQ_E1, SQ_G1))
 			}
 		}
 
@@ -597,7 +621,7 @@ func genKingMoves(moves *[]Move, p *Position, us, them Color, castling bool) {
 			mustNotBeAttacked := squaresBetween[SQ_B1][SQ_E1]
 
 			if emptySquares&occupied == 0 && mustNotBeAttacked&attacked == 0 {
-				*moves = append(*moves, Move{Piece: King, Type: Castle, From: SQ_E1, To: SQ_C1})
+				*moves = append(*moves, NewCastleMove(SQ_E1, SQ_C1))
 			}
 		}
 	} else {
@@ -606,7 +630,7 @@ func genKingMoves(moves *[]Move, p *Position, us, them Color, castling bool) {
 			mustNotBeAttacked := squaresBetween[SQ_D8][SQ_H8]
 
 			if emptySquares&occupied == 0 && mustNotBeAttacked&attacked == 0 {
-				*moves = append(*moves, Move{Piece: King, Type: Castle, From: SQ_E8, To: SQ_G8})
+				*moves = append(*moves, NewCastleMove(SQ_E8, SQ_G8))
 			}
 		}
 
@@ -615,7 +639,7 @@ func genKingMoves(moves *[]Move, p *Position, us, them Color, castling bool) {
 			mustNotBeAttacked := squaresBetween[SQ_B8][SQ_E8]
 
 			if emptySquares&occupied == 0 && mustNotBeAttacked&attacked == 0 {
-				*moves = append(*moves, Move{Piece: King, Type: Castle, From: SQ_E8, To: SQ_C8})
+				*moves = append(*moves, NewCastleMove(SQ_E8, SQ_C8))
 			}
 		}
 	}

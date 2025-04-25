@@ -388,8 +388,8 @@ func Do(p *Position, m Move) {
 	//enPassant := BitBoard(1) << p.EnPassantSquare
 	p.EnPassantSquare = SQ_NULL
 	us, them := p.SideToMove()
-	from := BitBoard(1) << m.From
-	to := BitBoard(1) << m.To
+	from := BitBoard(1) << m.From()
+	to := BitBoard(1) << m.To()
 	isCapture := p.AllPieces[them]&to != 0
 
 	if isCapture {
@@ -409,7 +409,7 @@ func Do(p *Position, m Move) {
 		p.move(Pawn, us, from, to)
 	case Castle:
 		p.move(m.Piece, us, from, to)
-		switch m.To {
+		switch m.To() {
 		case SQ_G1:
 			p.CastlingRights ^= WhiteKingSideCastle | WhiteQueenSideCastle
 			p.move(Rook, us, BB_SQ_H1, BB_SQ_F1)
@@ -426,29 +426,29 @@ func Do(p *Position, m Move) {
 	default:
 		p.move(m.Piece, us, from, to)
 		if m.Piece == Pawn {
-			if m.From-m.To == 16 {
-				p.EnPassantSquare = m.To + 8
+			if m.From()-m.To() == 16 {
+				p.EnPassantSquare = m.To() + 8
 			}
 
-			if m.To-m.From == 16 {
-				p.EnPassantSquare = m.To - 8
+			if m.To()-m.From() == 16 {
+				p.EnPassantSquare = m.To() - 8
 			}
 		}
 	}
 
-	if m.From == SQ_A1 || m.To == SQ_A1 || m.From == SQ_E1 {
+	if m.From() == SQ_A1 || m.To() == SQ_A1 || m.From() == SQ_E1 {
 		p.CastlingRights &= ^WhiteQueenSideCastle
 	}
 
-	if m.From == SQ_H1 || m.To == SQ_H1 || m.From == SQ_E1 {
+	if m.From() == SQ_H1 || m.To() == SQ_H1 || m.From() == SQ_E1 {
 		p.CastlingRights &= ^WhiteKingSideCastle
 	}
 
-	if m.From == SQ_A8 || m.To == SQ_A8 || m.From == SQ_E8 {
+	if m.From() == SQ_A8 || m.To() == SQ_A8 || m.From() == SQ_E8 {
 		p.CastlingRights &= ^BlackQueenSideCastle
 	}
 
-	if m.From == SQ_H8 || m.To == SQ_H8 || m.From == SQ_E8 {
+	if m.From() == SQ_H8 || m.To() == SQ_H8 || m.From() == SQ_E8 {
 		p.CastlingRights &= ^BlackKingSideCastle
 	}
 
