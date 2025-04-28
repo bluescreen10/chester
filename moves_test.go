@@ -2,7 +2,6 @@ package main_test
 
 import (
 	"fmt"
-	"os"
 	"slices"
 	"testing"
 
@@ -29,7 +28,12 @@ func TestMoveGen(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		if got := pawned.Perft(&p, test.depth, os.Stdout); got != test.nodes {
+		ch := pawned.Perft(&p, test.depth)
+		got := 0
+		for mc := range ch {
+			got += mc.Count
+		}
+		if got != test.nodes {
 			t.Fatalf("Perft(%d) = %d, want %d", test.depth, got, test.nodes)
 		}
 	}

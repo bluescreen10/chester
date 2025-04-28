@@ -29,21 +29,21 @@ func SearchBestMove(ctx context.Context, p *Position) chan evaluation {
 
 func minmax(p *Position, alpha, beta, depth int) (int, Move) {
 	if depth == 0 {
-		return eval(p), Move{}
+		return eval(p), Move(0)
 	}
 	moves := make([]Move, 0, 218)
 	inCheck := LegalMoves(&moves, p)
 
 	if inCheck && len(moves) == 0 {
 		if p.WhiteToMove {
-			return math.MinInt, Move{}
+			return math.MinInt, Move(0)
 		} else {
-			return math.MaxInt, Move{}
+			return math.MaxInt, Move(0)
 		}
 	}
 
 	if len(moves) == 0 {
-		return 0, Move{}
+		return 0, Move(0)
 	}
 
 	if p.WhiteToMove {

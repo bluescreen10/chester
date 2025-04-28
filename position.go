@@ -56,11 +56,11 @@ const (
 type Piece uint8
 
 const (
-	Pawn Piece = iota
-	Knight
+	Knight Piece = iota
 	Bishop
 	Rook
 	Queen
+	Pawn
 	King
 	Empty
 )
@@ -396,10 +396,10 @@ func Do(p *Position, m Move) {
 		p.removeAll(them, to)
 	}
 
-	switch m.Type {
+	switch m.Type() {
 	case Promotion:
 		p.remove(Pawn, us, from)
-		p.put(m.PromotionPiece, us, to)
+		p.put(m.Piece(), us, to)
 	case EnPassant:
 		if us == White {
 			p.remove(Pawn, them, to.RotateLeft(8))
@@ -408,7 +408,7 @@ func Do(p *Position, m Move) {
 		}
 		p.move(Pawn, us, from, to)
 	case Castle:
-		p.move(m.Piece, us, from, to)
+		p.move(m.Piece(), us, from, to)
 		switch m.To() {
 		case SQ_G1:
 			p.CastlingRights ^= WhiteKingSideCastle | WhiteQueenSideCastle
@@ -424,8 +424,8 @@ func Do(p *Position, m Move) {
 			p.move(Rook, us, BB_SQ_A8, BB_SQ_D8)
 		}
 	default:
-		p.move(m.Piece, us, from, to)
-		if m.Piece == Pawn {
+		p.move(m.Piece(), us, from, to)
+		if m.Piece() == Pawn {
 			if m.From()-m.To() == 16 {
 				p.EnPassantSquare = m.To() + 8
 			}
@@ -452,7 +452,7 @@ func Do(p *Position, m Move) {
 		p.CastlingRights &= ^BlackKingSideCastle
 	}
 
-	if m.Piece != Pawn && !isCapture {
+	if m.Piece() != Pawn && !isCapture {
 		p.HalfMoves++
 	}
 

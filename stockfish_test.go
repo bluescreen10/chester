@@ -5,7 +5,6 @@ package main_test
 
 import (
 	"bufio"
-	"bytes"
 	"fmt"
 	"maps"
 	"os/exec"
@@ -21,7 +20,7 @@ import (
 )
 
 func TestCompareToStockfish(t *testing.T) {
-	maxDepth := 
+	maxDepth := 7
 	for depth := 1; depth <= maxDepth; depth++ {
 		comparePawnedAndStockfish(t, depth, "")
 	}
@@ -36,9 +35,12 @@ func comparePawnedAndStockfish(t *testing.T, depth int, moves string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	output := bytes.Buffer{}
-	pawned.Perft(p, depth, &output)
-	pawnedMoves := readOutput(bufio.NewReader(&output))
+
+	ch := pawned.Perft(&p, depth)
+	pawnedMoves := make(map[string]int)
+	for mc := range ch {
+		pawnedMoves[mc.Move.String()] = mc.Count
+	}
 
 	// Compare the results
 	diff := compareMaps(pawnedMoves, sfMoves)

@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -210,11 +209,15 @@ func (s *UCIServer) handlePerft(args []string) {
 	}
 
 	go func() {
+		nodes := 0
 		start := time.Now()
-		output := bytes.Buffer{}
-		nodes := Perft(&s.pos, depth, s)
+		ch := Perft(&s.pos, depth)
+		for m := range ch {
+			nodes += m.Count
+			s.WriteString("%s: %d", m.Move, m.Count)
+		}
 		duration := time.Since(start)
-		fmt.Fprintf(s, "%s\nperft %d in %s\n", output.String(), nodes, duration)
+		s.WriteString("perft %d in %s\n", nodes, duration)
 	}()
 }
 

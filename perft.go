@@ -1,30 +1,32 @@
 package main
 
-import (
-	"fmt"
-	"io"
-)
+type MoveCount struct {
+	Move  Move
+	Count int
+}
 
-func Perft(p *Position, depth int, output io.Writer) int {
-	var nodes int
-	moves := movesPool.Get().(*[]Move)
-	defer movesPool.Put(moves)
-	*moves = (*moves)[:0]
-	LegalMoves(moves, p)
+func Perft(p *Position, depth int) <-chan MoveCount {
+	ch := make(chan MoveCount, maxMoves)
 
-	for _, m := range *moves {
-		if depth == 1 {
-			fmt.Fprintf(output, "%s: 1\n", m)
-			nodes++
-		} else {
-			newPos := *p
-			Do(&newPos, m)
-			newNodes := perft(&newPos, depth-1)
-			fmt.Fprintf(output, "%s: %d\n", m, newNodes)
-			nodes += newNodes
+	go func() {
+		moves := movesPool.Get().(*[]Move)
+		*moves = (*moves)[:0]
+		LegalMoves(moves, p)
+
+		for _, m := range *moves {
+			if depth == 1 {
+				ch <- MoveCount{Move: m, Count: 1}
+			} else {
+				newPos := *p
+				Do(&newPos, m)
+				newNodes := perft(&newPos, depth-1)
+				ch <- MoveCount{Move: m, Count: newNodes}
+			}
 		}
-	}
-	return nodes
+		movesPool.Put(moves)
+		close(ch)
+	}()
+	return ch
 }
 
 func perft(p *Position, depth int) int {

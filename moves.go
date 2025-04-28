@@ -22,34 +22,60 @@ const (
 // First 3 bits move type
 // Next 6 bits from square
 // Last 6 bits to square
-type Move struct {
-	Piece, PromotionPiece Piece
-	Type                  MoveType
-	from, to              Square
-}
+type Move uint16
 
 func NewMove(from, to Square, piece Piece) Move {
-	return Move{Piece: piece, from: from, to: to}
+	return Move(piece)<<12 | Move(from)<<6 | Move(to)
+	//return Move{Piece: piece, from: from, to: to}
 }
 
 func NewEnPassantMove(from, to Square) Move {
-	return Move{Piece: Pawn, from: from, to: to, Type: EnPassant}
+	return Move(0x09)<<12 | Move(from)<<6 | Move(to)
+	//Move{Piece: Pawn, from: from, to: to, Type: EnPassant}
 }
 
 func NewCastleMove(from, to Square) Move {
-	return Move{Piece: King, from: from, to: to, Type: Castle}
+	return Move(0x08)<<12 | Move(from)<<6 | Move(to)
+	//return Move{Piece: King, from: from, to: to, Type: Castle}
 }
 
 func NewPromotionMove(from, to Square, promotion Piece) Move {
-	return Move{Piece: Pawn, from: from, to: to, PromotionPiece: promotion, Type: Promotion}
+	return Move(0x0c|promotion)<<12 | Move(from)<<6 | Move(to)
+	//return Move{Piece: Pawn, from: from, to: to, PromotionPiece: promotion, Type: Promotion}
 }
 
 func (m Move) From() Square {
-	return m.from
+	return Square(m >> 6 & 0x3f)
 }
 
 func (m Move) To() Square {
-	return m.to
+	return Square(m & 0x3f)
+}
+
+func (m Move) Type() MoveType {
+	switch m >> 12 {
+	case 0x0c, 0x0d, 0x0e, 0x0f:
+		return Promotion
+	case 0x08:
+		return Castle
+	case 0x09:
+		return EnPassant
+	default:
+		return Default
+	}
+}
+
+func (m Move) Piece() Piece {
+	switch p := m >> 12; p {
+	case 0x0c, 0x0d, 0x0e, 0x0f:
+		return Piece(p & 0x03)
+	case 0x08:
+		return King
+	case 0x09:
+		return Pawn
+	default:
+		return Piece(p & 0x07)
+	}
 }
 
 type config struct {
@@ -80,12 +106,12 @@ func ParseMove(m string, p Position) (Move, error) {
 		case 'q':
 			return NewPromotionMove(from, to, Queen), nil
 		default:
-			return Move{}, fmt.Errorf("invalid move suffix")
+			return Move(0), fmt.Errorf("invalid move suffix")
 		}
 	} else {
 		piece := p.Get(from)
 		if piece == Empty {
-			return Move{}, fmt.Errorf("no piece at from square: %s", from)
+			return Move(0), fmt.Errorf("no piece at from square: %s", from)
 		}
 		return NewMove(from, to, piece), nil
 	}
@@ -97,8 +123,8 @@ func (m Move) String() string {
 
 	suffix := ""
 
-	if m.Type == Promotion {
-		switch m.PromotionPiece {
+	if m.Type() == Promotion {
+		switch m.Piece() {
 		case Bishop:
 			suffix = "b"
 		case Knight:
