@@ -84,11 +84,10 @@ type Position struct {
 
 	EnPassant BitBoard
 
-	WhiteToMove bool
-
-	CastlingRights CastlingRights
-	HalfMoves      uint8
 	FullMoves      uint16
+	HalfMoves      uint8
+	CastlingRights CastlingRights
+	WhiteToMove    bool
 }
 
 func Parse(fen string) (Position, error) {

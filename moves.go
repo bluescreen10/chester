@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"sync"
 )
 
 const (
@@ -166,13 +165,6 @@ func (m Move) String() string {
 	return fmt.Sprintf("%c%d%c%d%s", 'a'+fromFile, fromRank+1, 'a'+toFile, toRank+1, suffix)
 }
 
-var movesPool = sync.Pool{
-	New: func() any {
-		var s []Move
-		return &s
-	},
-}
-
 func LegalMoves(moves *[]Move, pos *Position) bool {
 	us, them := pos.SideToMove()
 	king := pos.Pieces[us][King]
@@ -189,7 +181,6 @@ func LegalMoves(moves *[]Move, pos *Position) bool {
 	switch c := checkers.OnesCount(); {
 	case c >= 2:
 		genKingMoves(moves, king, pos.Occupied, enemiesOrEmpty, pos, us, them, false)
-		return true
 	case c == 1:
 		captureMask := checkers
 		pushMask := EmptyBoard
@@ -215,8 +206,8 @@ func LegalMoves(moves *[]Move, pos *Position) bool {
 		genRookMoves(moves, rookAndQueens, pos.Occupied, enemiesOrEmpty&mask, pinnedStraight)
 		genQueenMoves(moves, pos, us, mask, pinnedStraight, pinnedDiagonal)
 		genKingMoves(moves, king, pos.Occupied, enemiesOrEmpty, pos, us, them, inCheck)
-		return inCheck
 	}
+	return inCheck
 }
 
 func checkersAndPinned(p *Position, us, them Color, kingSq Square, king BitBoard) (BitBoard, BitBoard, BitBoard) {
@@ -641,6 +632,10 @@ func genKingMoves(moves *[]Move, king, occupied, enemiesOrEmpty BitBoard, p *Pos
 	from, _ := king.PopLSB()
 	potentialTargets := kingMoves[from] & enemiesOrEmpty
 
+	if potentialTargets == 0 {
+		return
+	}
+
 	enemyKing := p.Pieces[them][King]
 	attacked := attacks(p, them, us)
 
@@ -655,7 +650,7 @@ func genKingMoves(moves *[]Move, king, occupied, enemiesOrEmpty BitBoard, p *Pos
 	}
 
 	// castling
-	if us == White {
+	if p.WhiteToMove {
 		if p.CanWhiteCastleKingSide() {
 			emptySquares := squaresBetween[SQ_E1][SQ_H1]
 			mustNotBeAttacked := squaresBetween[SQ_D1][SQ_H1]

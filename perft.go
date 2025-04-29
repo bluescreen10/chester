@@ -1,8 +1,17 @@
 package main
 
+import "sync"
+
 type MoveCount struct {
 	Move  Move
 	Count int
+}
+
+var movesPool = sync.Pool{
+	New: func() any {
+		var s []Move
+		return &s
+	},
 }
 
 func Perft(p *Position, depth int) <-chan MoveCount {
@@ -13,11 +22,13 @@ func Perft(p *Position, depth int) <-chan MoveCount {
 		*moves = (*moves)[:0]
 		LegalMoves(moves, p)
 
+		var newPos Position
+
 		for _, m := range *moves {
 			if depth == 1 {
 				ch <- MoveCount{Move: m, Count: 1}
 			} else {
-				newPos := *p
+				newPos = *p
 				Do(&newPos, m)
 				newNodes := perft(&newPos, depth-1)
 				ch <- MoveCount{Move: m, Count: newNodes}
@@ -40,8 +51,10 @@ func perft(p *Position, depth int) int {
 		return len(*moves)
 	}
 
+	var newPos Position
+
 	for _, m := range *moves {
-		newPos := *p
+		newPos = *p
 		Do(&newPos, m)
 		newNodes := perft(&newPos, depth-1)
 		nodes += newNodes
