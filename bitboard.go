@@ -43,3 +43,11 @@ func (b BitBoard) OnesCount() int8 {
 func (b BitBoard) RotateLeft(offset int) BitBoard {
 	return BitBoard(bits.RotateLeft64(uint64(b), offset))
 }
+
+func (b BitBoard) Square() Square {
+	return Square(bits.TrailingZeros64(uint64(b)))
+}
+
+func NewBitBoardFromSquare(sq Square) BitBoard {
+	return 1 << sq
+}

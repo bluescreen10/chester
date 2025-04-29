@@ -25,17 +25,17 @@ func TestUpdateWhiteCastlingRights(t *testing.T) {
 	}{
 		{
 			fen:      "4k3/8/8/8/3b4/8/8/R3K2R w KQ - 0 1",
-			move:     pawned.NewCastleMove(pawned.SQ_E1, pawned.SQ_G1),
+			move:     pawned.NewCastleKingSideMove(pawned.SQ_E1, pawned.SQ_G1),
 			expected: []bool{false, false},
 		},
 		{
 			fen:      "4k3/8/8/8/3b4/8/8/R3K2R w KQ - 0 1",
-			move:     pawned.NewCastleMove(pawned.SQ_E1, pawned.SQ_F1),
+			move:     pawned.NewCastleKingSideMove(pawned.SQ_E1, pawned.SQ_G1),
 			expected: []bool{false, false},
 		},
 		{
 			fen:      "4k3/8/8/8/3b4/8/8/R3K2R w KQ - 0 1",
-			move:     pawned.NewCastleMove(pawned.SQ_E1, pawned.SQ_C1),
+			move:     pawned.NewCastleQueenSideMove(pawned.SQ_E1, pawned.SQ_C1),
 			expected: []bool{false, false},
 		},
 		{
@@ -115,13 +115,13 @@ func TestEnPassant(t *testing.T) {
 		{
 			fen:             "4k3/8/8/8/4p3/8/3P4/R3K2R w KQ - 0 1",
 			after:           "4k3/8/8/8/3Pp3/8/8/R3K2R b KQ d3 0 1",
-			move:            pawned.NewMove(pawned.SQ_D2, pawned.SQ_D4, pawned.Pawn),
+			move:            pawned.NewDoublePushMove(pawned.SQ_D2, pawned.SQ_D4),
 			enPassantSquare: pawned.SQ_D3,
 		},
 		{
 			fen:             "rnbqkb1r/pppppppp/7n/P7/8/8/1PPPPPPP/RNBQKBNR b KQkq - 0 3",
 			after:           "rnbqkb1r/p1pppppp/7n/Pp6/8/8/1PPPPPPP/RNBQKBNR w KQkq b6 0 4",
-			move:            pawned.NewMove(pawned.SQ_B7, pawned.SQ_B5, pawned.Pawn),
+			move:            pawned.NewDoublePushMove(pawned.SQ_B7, pawned.SQ_B5),
 			enPassantSquare: pawned.SQ_B6,
 		},
 	}
@@ -133,7 +133,7 @@ func TestEnPassant(t *testing.T) {
 		}
 
 		pawned.Do(&p, test.move)
-		if got := p.EnPassantSquare; got != test.enPassantSquare {
+		if got := p.EnPassant.Square(); got != test.enPassantSquare {
 			t.Errorf("Do(%s) failed to update en passant square expected %s got %s", test.move, test.enPassantSquare, got)
 		}
 

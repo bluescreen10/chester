@@ -72,6 +72,9 @@ const (
 	WhiteQueenSideCastle
 	BlackKingSideCastle
 	BlackQueenSideCastle
+
+	NotWhiteCastlingRights = ^(WhiteKingSideCastle | WhiteQueenSideCastle)
+	NotBlackCastlingRights = ^(BlackKingSideCastle | BlackQueenSideCastle)
 )
 
 type Position struct {
@@ -79,11 +82,13 @@ type Position struct {
 	AllPieces [Color(2)]BitBoard
 	Occupied  BitBoard
 
-	WhiteToMove     bool
-	EnPassantSquare Square
-	CastlingRights  CastlingRights
-	HalfMoves       uint8
-	FullMoves       uint16
+	EnPassant BitBoard
+
+	WhiteToMove bool
+
+	CastlingRights CastlingRights
+	HalfMoves      uint8
+	FullMoves      uint16
 }
 
 func Parse(fen string) (Position, error) {
@@ -176,7 +181,7 @@ func Parse(fen string) (Position, error) {
 		}
 	}
 
-	pos.EnPassantSquare = SquareFromString(parts[3])
+	pos.EnPassant = NewBitBoardFromSquare(SquareFromString(parts[3]))
 
 	halfMoves, err := strconv.Atoi(parts[4])
 	if err != nil {
@@ -271,7 +276,7 @@ func (p Position) Fen() string {
 	}
 
 	fen.WriteByte(' ')
-	fen.WriteString(p.EnPassantSquare.String())
+	fen.WriteString(p.EnPassant.Square().String())
 	fen.WriteString(fmt.Sprintf(" %d %d", p.HalfMoves, p.FullMoves))
 
 	return fen.String()
@@ -329,32 +334,32 @@ func (p Position) SideToMove() (Color, Color) {
 }
 
 func (p Position) IsEnPassant() bool {
-	return p.EnPassantSquare != SQ_NULL
+	return p.EnPassant != 0
 }
 
-func (p Position) EnPassantFile() BitBoard {
-	_, file := p.EnPassantSquare.RankAndFile()
-	switch file {
-	case 0:
-		return File_A
-	case 1:
-		return File_B
-	case 2:
-		return File_C
-	case 3:
-		return File_D
-	case 4:
-		return File_E
-	case 5:
-		return File_F
-	case 6:
-		return File_G
-	case 7:
-		return File_H
-	default:
-		return BitBoard(0)
-	}
-}
+// func (p Position) EnPassantFile() BitBoard {
+// 	_, file := p.EnPassantSquare.RankAndFile()
+// 	switch file {
+// 	case 0:
+// 		return File_A
+// 	case 1:
+// 		return File_B
+// 	case 2:
+// 		return File_C
+// 	case 3:
+// 		return File_D
+// 	case 4:
+// 		return File_E
+// 	case 5:
+// 		return File_F
+// 	case 6:
+// 		return File_G
+// 	case 7:
+// 		return File_H
+// 	default:
+// 		return BitBoard(0)
+// 	}
+// }
 
 func (p *Position) CanWhiteCastleKingSide() bool {
 	return p.CastlingRights&WhiteKingSideCastle != 0
@@ -375,81 +380,106 @@ func (p *Position) CanBlackCastleQueenSide() bool {
 const (
 	BB_SQ_A1 BitBoard = 1 << SQ_A1
 	BB_SQ_D1 BitBoard = 1 << SQ_D1
+	BB_SQ_E1 BitBoard = 1 << SQ_E1
 	BB_SQ_H1 BitBoard = 1 << SQ_H1
 	BB_SQ_F1 BitBoard = 1 << SQ_F1
 	BB_SQ_A8 BitBoard = 1 << SQ_A8
 	BB_SQ_F8 BitBoard = 1 << SQ_F8
 	BB_SQ_H8 BitBoard = 1 << SQ_H8
 	BB_SQ_D8 BitBoard = 1 << SQ_D8
+	BB_SQ_E8 BitBoard = 1 << SQ_E8
 )
 
 func Do(p *Position, m Move) {
 
-	//enPassant := BitBoard(1) << p.EnPassantSquare
-	p.EnPassantSquare = SQ_NULL
+	p.EnPassant = 0
 	us, them := p.SideToMove()
 	from := BitBoard(1) << m.From()
 	to := BitBoard(1) << m.To()
 	isCapture := p.AllPieces[them]&to != 0
 
-	if isCapture {
-		p.removeAll(them, to)
-	}
-
 	switch m.Type() {
 	case Promotion:
+		if isCapture {
+			p.removeAll(them, to)
+
+			fromTo := from | to
+
+			if fromTo&(BB_SQ_H1|BB_SQ_E1) != 0 {
+				p.CastlingRights &^= WhiteKingSideCastle
+			}
+
+			if fromTo&(BB_SQ_A1|BB_SQ_E1) != 0 {
+				p.CastlingRights &^= WhiteQueenSideCastle
+			}
+
+			if fromTo&(BB_SQ_H8|BB_SQ_E8) != 0 {
+				p.CastlingRights &^= BlackKingSideCastle
+			}
+
+			if fromTo&(BB_SQ_A8|BB_SQ_E8) != 0 {
+				p.CastlingRights &^= BlackQueenSideCastle
+			}
+		}
 		p.remove(Pawn, us, from)
-		p.put(m.Piece(), us, to)
+		p.put(m.PromoPiece(), us, to)
+
 	case EnPassant:
-		if us == White {
+		if p.WhiteToMove {
 			p.remove(Pawn, them, to.RotateLeft(8))
 		} else {
 			p.remove(Pawn, them, to.RotateLeft(-8))
 		}
 		p.move(Pawn, us, from, to)
-	case Castle:
-		p.move(m.Piece(), us, from, to)
-		switch m.To() {
-		case SQ_G1:
-			p.CastlingRights ^= WhiteKingSideCastle | WhiteQueenSideCastle
+	case CastleKingSide:
+		p.move(King, us, from, to)
+		if p.WhiteToMove {
 			p.move(Rook, us, BB_SQ_H1, BB_SQ_F1)
-		case SQ_C1:
-			p.CastlingRights ^= WhiteKingSideCastle | WhiteQueenSideCastle
-			p.move(Rook, us, BB_SQ_A1, BB_SQ_D1)
-		case SQ_G8:
-			p.CastlingRights ^= BlackKingSideCastle | BlackQueenSideCastle
+			p.CastlingRights &= NotWhiteCastlingRights
+		} else {
 			p.move(Rook, us, BB_SQ_H8, BB_SQ_F8)
-		case SQ_C8:
-			p.CastlingRights ^= BlackKingSideCastle | BlackQueenSideCastle
+			p.CastlingRights &= NotBlackCastlingRights
+		}
+	case CastleQueenSide:
+		p.move(King, us, from, to)
+		if p.WhiteToMove {
+			p.move(Rook, us, BB_SQ_A1, BB_SQ_D1)
+			p.CastlingRights &= NotWhiteCastlingRights
+		} else {
 			p.move(Rook, us, BB_SQ_A8, BB_SQ_D8)
+			p.CastlingRights &= NotBlackCastlingRights
+
+		}
+	case DoublePush:
+		p.move(Pawn, us, from, to)
+		if p.WhiteToMove {
+			p.EnPassant = NewBitBoardFromSquare(m.To() + 8)
+		} else {
+			p.EnPassant = NewBitBoardFromSquare(m.To() - 8)
 		}
 	default:
-		p.move(m.Piece(), us, from, to)
-		if m.Piece() == Pawn {
-			if m.From()-m.To() == 16 {
-				p.EnPassantSquare = m.To() + 8
-			}
-
-			if m.To()-m.From() == 16 {
-				p.EnPassantSquare = m.To() - 8
-			}
+		if isCapture {
+			p.removeAll(them, to)
 		}
-	}
+		p.move(m.Piece(), us, from, to)
 
-	if m.From() == SQ_A1 || m.To() == SQ_A1 || m.From() == SQ_E1 {
-		p.CastlingRights &= ^WhiteQueenSideCastle
-	}
+		fromTo := from | to
 
-	if m.From() == SQ_H1 || m.To() == SQ_H1 || m.From() == SQ_E1 {
-		p.CastlingRights &= ^WhiteKingSideCastle
-	}
+		if fromTo&(BB_SQ_H1|BB_SQ_E1) != 0 {
+			p.CastlingRights &^= WhiteKingSideCastle
+		}
 
-	if m.From() == SQ_A8 || m.To() == SQ_A8 || m.From() == SQ_E8 {
-		p.CastlingRights &= ^BlackQueenSideCastle
-	}
+		if fromTo&(BB_SQ_A1|BB_SQ_E1) != 0 {
+			p.CastlingRights &^= WhiteQueenSideCastle
+		}
 
-	if m.From() == SQ_H8 || m.To() == SQ_H8 || m.From() == SQ_E8 {
-		p.CastlingRights &= ^BlackKingSideCastle
+		if fromTo&(BB_SQ_H8|BB_SQ_E8) != 0 {
+			p.CastlingRights &^= BlackKingSideCastle
+		}
+
+		if fromTo&(BB_SQ_A8|BB_SQ_E8) != 0 {
+			p.CastlingRights &^= BlackQueenSideCastle
+		}
 	}
 
 	if m.Piece() != Pawn && !isCapture {
