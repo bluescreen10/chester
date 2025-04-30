@@ -1,62 +1,53 @@
 package main
 
-import "sync"
-
 type MoveCount struct {
 	Move  Move
 	Count int
 }
 
-var movesPool = sync.Pool{
-	New: func() any {
-		var s []Move
-		return &s
-	},
-}
-
 func Perft(p *Position, depth int) <-chan MoveCount {
-	ch := make(chan MoveCount, maxMoves)
+	ch := make(chan MoveCount, 2)
 
 	go func() {
-		moves := movesPool.Get().(*[]Move)
-		*moves = (*moves)[:0]
-		LegalMoves(moves, p)
+		moves := make([]Move, 0, 1024)
+
+		LegalMoves(&moves, p)
 
 		var newPos Position
 
-		for _, m := range *moves {
+		count := len(moves)
+		for i := 0; i < count; i++ {
+			m := moves[i]
 			if depth == 1 {
 				ch <- MoveCount{Move: m, Count: 1}
 			} else {
 				newPos = *p
 				Do(&newPos, m)
-				newNodes := perft(&newPos, depth-1)
+				newNodes := perft(&newPos, moves[count:], depth-1)
 				ch <- MoveCount{Move: m, Count: newNodes}
 			}
 		}
-		movesPool.Put(moves)
 		close(ch)
 	}()
 	return ch
 }
 
-func perft(p *Position, depth int) int {
-	var nodes int
-	moves := movesPool.Get().(*[]Move)
-	defer movesPool.Put(moves)
-	*moves = (*moves)[:0]
-	LegalMoves(moves, p)
+func perft(p *Position, moves []Move, depth int) int {
+	LegalMoves(&moves, p)
+	count := len(moves)
 
 	if depth == 1 {
-		return len(*moves)
+		return count
 	}
 
+	var nodes int
 	var newPos Position
 
-	for _, m := range *moves {
+	for i := 0; i < count; i++ {
+		m := moves[i]
 		newPos = *p
 		Do(&newPos, m)
-		newNodes := perft(&newPos, depth-1)
+		newNodes := perft(&newPos, moves[count:], depth-1)
 		nodes += newNodes
 	}
 	return nodes
