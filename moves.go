@@ -4,10 +4,6 @@ import (
 	"fmt"
 )
 
-const (
-	maxMoves = 218
-)
-
 type MoveType uint8
 
 const (
@@ -368,9 +364,9 @@ func genPawnMoves(moves *[]Move, p *Position, us, them Color, moveMask, pinnedSt
 	genForwardMoves(moves, cfg, pawnsNotPinnedDiagonal, occupied, moveMask, pinnedStraight)
 	genLeftAttackMoves(moves, cfg, pawnsNotPinnedStraight, enemies, moveMask, pinnedDiagonal)
 	genRightAttackMoves(moves, cfg, pawnsNotPinnedStraight, enemies, moveMask, pinnedDiagonal)
-	if p.IsEnPassant() {
+	if p.EnPassantTarget != 0 {
 		enemyQueenOrRooks := p.Pieces[them][Queen] | p.Pieces[them][Rook]
-		genEnPassantMoves(moves, cfg, pawns, occupied, p.EnPassant, enemyQueenOrRooks, moveMask, pinnedStraight|pinnedDiagonal, kingSq)
+		genEnPassantMoves(moves, cfg, pawns&cfg.enPassantRank, occupied, p.EnPassantTarget&moveMask, enemyQueenOrRooks, pinnedStraight|pinnedDiagonal, kingSq)
 	}
 }
 
@@ -466,45 +462,27 @@ func genRightAttackMoves(moves *[]Move, cfg config, pawns, enemies BitBoard, mov
 	}
 }
 
-func genEnPassantMoves(moves *[]Move, cfg config, pawns, occupied, enPassant BitBoard, enemyQueenOrRooks, moveMask, pinned BitBoard, kingSq Square) {
-	pawnsOnRank := pawns & cfg.enPassantRank
-	left := (pawnsOnRank &^ File_A).RotateLeft(cfg.leftAttacks) & enPassant & moveMask
+func genEnPassantMoves(moves *[]Move, cfg config, pawnsOnRank, occupied, enPassantTarget BitBoard, enemyQueenOrRooks, pinned BitBoard, kingSq Square) {
+	left := pawnsOnRank & (File_Not_A & enPassantTarget >> 1)
 	if left&^pinned != 0 {
-		sq, _ := left.PopLSB()
-		from := sq - Square(cfg.leftAttacks)
-		occupiedWithoutPawns := occupied&^(1<<from|enPassant.RotateLeft(-cfg.singlePushes)) | 1<<sq
-		path := genRookAttacks(kingSq, occupiedWithoutPawns)
-		potentialCheckers := enemyQueenOrRooks & path
-		if potentialCheckers == 0 {
-			*moves = append(*moves, NewEnPassantMove(from, sq))
-		} else {
-			for potentialCheckers != 0 {
-				var checker Square
-				checker, potentialCheckers = potentialCheckers.PopLSB()
-				if squaresBetween[kingSq][checker]&occupiedWithoutPawns != 0 {
-					*moves = append(*moves, NewEnPassantMove(from, sq))
-				}
-			}
+		occupiedWithoutPawns := occupied &^ (left | enPassantTarget)
+		path := genRookAttacks(kingSq, occupiedWithoutPawns) & cfg.enPassantRank
+		if enemyQueenOrRooks&path == 0 {
+			from, _ := left.PopLSB()
+			to := left.RotateLeft(cfg.rightAttacks).Square()
+			*moves = append(*moves, NewEnPassantMove(from, to))
 		}
 	}
 
-	right := (pawnsOnRank &^ File_H).RotateLeft(cfg.rightAttacks) & enPassant & moveMask
+	right := pawnsOnRank & (File_Not_H & enPassantTarget << 1)
 	if right&^pinned != 0 {
-		sq, _ := right.PopLSB()
-		from := sq - Square(cfg.rightAttacks)
-		occupiedWithoutPawns := occupied&^(1<<from|enPassant.RotateLeft(-cfg.singlePushes)) | 1<<sq
-		path := genRookAttacks(kingSq, occupiedWithoutPawns)
-		potentialCheckers := enemyQueenOrRooks & path
-		if potentialCheckers == 0 {
-			*moves = append(*moves, NewEnPassantMove(from, sq))
-		} else {
-			for potentialCheckers != 0 {
-				var checker Square
-				checker, potentialCheckers = potentialCheckers.PopLSB()
-				if squaresBetween[kingSq][checker]&occupiedWithoutPawns != 0 {
-					*moves = append(*moves, NewEnPassantMove(from, sq))
-				}
-			}
+		occupiedWithoutPawns := occupied &^ (right | enPassantTarget)
+		path := genRookAttacks(kingSq, occupiedWithoutPawns) & cfg.enPassantRank
+
+		if enemyQueenOrRooks&path == 0 {
+			from, _ := right.PopLSB()
+			to := right.RotateLeft(cfg.leftAttacks).Square()
+			*moves = append(*moves, NewEnPassantMove(from, to))
 		}
 	}
 }

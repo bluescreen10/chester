@@ -104,25 +104,25 @@ func TestEnPassant(t *testing.T) {
 		fen             string
 		after           string
 		move            pawned.Move
-		enPassantSquare pawned.Square
+		enPassantTarget pawned.Square
 	}{
 		{
 			fen:             "4k3/8/8/8/3Pp3/8/8/R3K2R b KQ d3 0 1",
 			after:           "4k3/8/8/8/8/3p4/8/R3K2R w KQ - 0 2",
 			move:            pawned.NewEnPassantMove(pawned.SQ_E4, pawned.SQ_D3),
-			enPassantSquare: pawned.SQ_NULL,
+			enPassantTarget: pawned.SQ_NULL,
 		},
 		{
 			fen:             "4k3/8/8/8/4p3/8/3P4/R3K2R w KQ - 0 1",
 			after:           "4k3/8/8/8/3Pp3/8/8/R3K2R b KQ d3 0 1",
 			move:            pawned.NewDoublePushMove(pawned.SQ_D2, pawned.SQ_D4),
-			enPassantSquare: pawned.SQ_D3,
+			enPassantTarget: pawned.SQ_D4,
 		},
 		{
 			fen:             "rnbqkb1r/pppppppp/7n/P7/8/8/1PPPPPPP/RNBQKBNR b KQkq - 0 3",
 			after:           "rnbqkb1r/p1pppppp/7n/Pp6/8/8/1PPPPPPP/RNBQKBNR w KQkq b6 0 4",
 			move:            pawned.NewDoublePushMove(pawned.SQ_B7, pawned.SQ_B5),
-			enPassantSquare: pawned.SQ_B6,
+			enPassantTarget: pawned.SQ_B5,
 		},
 	}
 
@@ -133,8 +133,8 @@ func TestEnPassant(t *testing.T) {
 		}
 
 		pawned.Do(&p, test.move)
-		if got := p.EnPassant.Square(); got != test.enPassantSquare {
-			t.Errorf("Do(%s) failed to update en passant square expected %s got %s", test.move, test.enPassantSquare, got)
+		if got := p.EnPassantTarget.Square(); got != test.enPassantTarget {
+			t.Errorf("Do(%s) failed to update en passant square expected %s got %s", test.move, test.enPassantTarget, got)
 		}
 
 		if got := p.Fen(); got != test.after {

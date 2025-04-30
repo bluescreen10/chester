@@ -97,6 +97,18 @@ func TestWhitePawnMoves(t *testing.T) {
 		fen      string
 		expected []string
 	}{
+		// En Passant with an enemy pawn en passant target pin
+		{
+			fen: "rnbqkbnr/ppp3pp/8/3pPp2/8/8/PPPKPPPP/RNBQ1BNR w kq d6 0 4",
+			expected: []string{
+				"a2a3", "a2a4", "b1a3", "b1c3", "b2b3",
+				"b2b4", "c2c3", "c2c4", "d1e1", "d2c3",
+				"d2d3", "d2e1", "d2e3", "e2e3", "e2e4",
+				"e5d6", "e5e6", "f2f3", "f2f4", "g1f3",
+				"g1h3", "g2g3", "g2g4", "h2h3", "h2h4",
+			},
+		},
+
 		{
 			// En Passant with veritcal pin
 			fen: "rnb1kbnr/pppp1p1p/5q2/4pPp1/8/8/PPPPPKPP/RNBQ1BNR w kq g6 0 4",

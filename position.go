@@ -82,7 +82,7 @@ type Position struct {
 	AllPieces [Color(2)]BitBoard
 	Occupied  BitBoard
 
-	EnPassant BitBoard
+	EnPassantTarget BitBoard
 
 	FullMoves      uint16
 	HalfMoves      uint8
@@ -180,7 +180,13 @@ func Parse(fen string) (Position, error) {
 		}
 	}
 
-	pos.EnPassant = NewBitBoardFromSquare(SquareFromString(parts[3]))
+	if sq := SquareFromString(parts[3]); sq != SQ_NULL {
+		if pos.WhiteToMove {
+			pos.EnPassantTarget = NewBitBoardFromSquare(sq + 8)
+		} else {
+			pos.EnPassantTarget = NewBitBoardFromSquare(sq - 8)
+		}
+	}
 
 	halfMoves, err := strconv.Atoi(parts[4])
 	if err != nil {
@@ -275,7 +281,11 @@ func (p Position) Fen() string {
 	}
 
 	fen.WriteByte(' ')
-	fen.WriteString(p.EnPassant.Square().String())
+	if p.WhiteToMove {
+		fen.WriteString((p.EnPassantTarget >> 8).Square().String())
+	} else {
+		fen.WriteString((p.EnPassantTarget << 8).Square().String())
+	}
 	fen.WriteString(fmt.Sprintf(" %d %d", p.HalfMoves, p.FullMoves))
 
 	return fen.String()
@@ -333,7 +343,7 @@ func (p Position) SideToMove() (Color, Color) {
 }
 
 func (p Position) IsEnPassant() bool {
-	return p.EnPassant != 0
+	return p.EnPassantTarget != 0
 }
 
 // func (p Position) EnPassantFile() BitBoard {
@@ -391,7 +401,7 @@ const (
 
 func Do(p *Position, m Move) {
 
-	p.EnPassant = 0
+	p.EnPassantTarget = 0
 	us, them := p.SideToMove()
 	from := BitBoard(1) << m.From()
 	to := BitBoard(1) << m.To()
@@ -451,11 +461,7 @@ func Do(p *Position, m Move) {
 		}
 	case DoublePush:
 		p.move(Pawn, us, from, to)
-		if p.WhiteToMove {
-			p.EnPassant = NewBitBoardFromSquare(m.To() + 8)
-		} else {
-			p.EnPassant = NewBitBoardFromSquare(m.To() - 8)
-		}
+		p.EnPassantTarget = to
 	default:
 		if isCapture {
 			p.removeAll(them, to)
