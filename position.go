@@ -386,19 +386,6 @@ func (p *Position) CanBlackCastleQueenSide() bool {
 	return p.CastlingRights&BlackQueenSideCastle != 0
 }
 
-const (
-	BB_SQ_A1 BitBoard = 1 << SQ_A1
-	BB_SQ_D1 BitBoard = 1 << SQ_D1
-	BB_SQ_E1 BitBoard = 1 << SQ_E1
-	BB_SQ_H1 BitBoard = 1 << SQ_H1
-	BB_SQ_F1 BitBoard = 1 << SQ_F1
-	BB_SQ_A8 BitBoard = 1 << SQ_A8
-	BB_SQ_F8 BitBoard = 1 << SQ_F8
-	BB_SQ_H8 BitBoard = 1 << SQ_H8
-	BB_SQ_D8 BitBoard = 1 << SQ_D8
-	BB_SQ_E8 BitBoard = 1 << SQ_E8
-)
-
 func Do(p *Position, m Move) {
 
 	p.EnPassantTarget = 0
