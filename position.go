@@ -6,46 +6,6 @@ import (
 	"strings"
 )
 
-// var statePool = sync.Pool{
-// 	New: func() any {
-// 		return &State{}
-// 	},
-// }
-
-// type State struct {
-// 	WhiteToMove bool
-
-// 	// Castling rights
-// 	WhiteQueenSideCastle bool
-// 	WhiteKingSideCastle  bool
-// 	BlackQueenSideCastle bool
-// 	BlackKingSideCastle  bool
-
-// 	// En passant file
-// 	EnPassantFile uint8
-
-// 	// Moves
-// 	HalfMoves uint8
-// 	FullMoves uint16
-
-// 	// Previous state
-// 	LastMove *Move
-// 	Capture  Piece
-// 	Previous *State
-// }
-
-// func (s *State) Reset() {
-// 	s.WhiteToMove = false
-// 	s.WhiteKingSideCastle = false
-// 	s.WhiteQueenSideCastle = false
-// 	s.BlackKingSideCastle = false
-// 	s.BlackQueenSideCastle = false
-// 	s.EnPassantFile = 0
-// 	s.HalfMoves = 0
-// 	s.FullMoves = 0
-// 	s.Previous = nil
-// }
-
 type Color uint8
 
 const (
@@ -72,9 +32,6 @@ const (
 	WhiteQueenSideCastle
 	BlackKingSideCastle
 	BlackQueenSideCastle
-
-	NotWhiteCastlingRights = ^(WhiteKingSideCastle | WhiteQueenSideCastle)
-	NotBlackCastlingRights = ^(BlackKingSideCastle | BlackQueenSideCastle)
 )
 
 type Position struct {
@@ -335,15 +292,11 @@ func (p Position) String() string {
 	return builder.String()
 }
 
-func (p Position) SideToMove() (Color, Color) {
+func (p *Position) SideToMove() (Color, Color) {
 	if p.WhiteToMove {
 		return White, Black
 	}
 	return Black, White
-}
-
-func (p Position) IsEnPassant() bool {
-	return p.EnPassantTarget != 0
 }
 
 // func (p Position) EnPassantFile() BitBoard {
@@ -388,64 +341,35 @@ func (p *Position) CanBlackCastleQueenSide() bool {
 
 func Do(p *Position, m Move) {
 
-	p.EnPassantTarget = 0
 	us, them := p.SideToMove()
 	from := BitBoard(1) << m.From()
 	to := BitBoard(1) << m.To()
 	isCapture := p.AllPieces[them]&to != 0
+	piece := m.Piece()
+	enPassantTarget := p.EnPassantTarget
+	p.EnPassantTarget = 0
 
 	switch m.Type() {
 	case Promotion:
 		if isCapture {
 			p.removeAll(them, to)
-
-			fromTo := from | to
-
-			if fromTo&(BB_SQ_H1|BB_SQ_E1) != 0 {
-				p.CastlingRights &^= WhiteKingSideCastle
-			}
-
-			if fromTo&(BB_SQ_A1|BB_SQ_E1) != 0 {
-				p.CastlingRights &^= WhiteQueenSideCastle
-			}
-
-			if fromTo&(BB_SQ_H8|BB_SQ_E8) != 0 {
-				p.CastlingRights &^= BlackKingSideCastle
-			}
-
-			if fromTo&(BB_SQ_A8|BB_SQ_E8) != 0 {
-				p.CastlingRights &^= BlackQueenSideCastle
-			}
+			p.updateCastlingRights(from | to)
 		}
 		p.remove(Pawn, us, from)
 		p.put(m.PromoPiece(), us, to)
 
 	case EnPassant:
-		if p.WhiteToMove {
-			p.remove(Pawn, them, to.RotateLeft(8))
-		} else {
-			p.remove(Pawn, them, to.RotateLeft(-8))
-		}
+		p.remove(Pawn, them, enPassantTarget)
 		p.move(Pawn, us, from, to)
 	case CastleKingSide:
 		p.move(King, us, from, to)
-		if p.WhiteToMove {
-			p.move(Rook, us, BB_SQ_H1, BB_SQ_F1)
-			p.CastlingRights &= NotWhiteCastlingRights
-		} else {
-			p.move(Rook, us, BB_SQ_H8, BB_SQ_F8)
-			p.CastlingRights &= NotBlackCastlingRights
-		}
+		p.move(Rook, us, from>>3, from>>1)
+		p.updateCastlingRights(from)
+
 	case CastleQueenSide:
 		p.move(King, us, from, to)
-		if p.WhiteToMove {
-			p.move(Rook, us, BB_SQ_A1, BB_SQ_D1)
-			p.CastlingRights &= NotWhiteCastlingRights
-		} else {
-			p.move(Rook, us, BB_SQ_A8, BB_SQ_D8)
-			p.CastlingRights &= NotBlackCastlingRights
-
-		}
+		p.move(Rook, us, from<<4, from<<2)
+		p.updateCastlingRights(from)
 	case DoublePush:
 		p.move(Pawn, us, from, to)
 		p.EnPassantTarget = to
@@ -453,28 +377,11 @@ func Do(p *Position, m Move) {
 		if isCapture {
 			p.removeAll(them, to)
 		}
-		p.move(m.Piece(), us, from, to)
-
-		fromTo := from | to
-
-		if fromTo&(BB_SQ_H1|BB_SQ_E1) != 0 {
-			p.CastlingRights &^= WhiteKingSideCastle
-		}
-
-		if fromTo&(BB_SQ_A1|BB_SQ_E1) != 0 {
-			p.CastlingRights &^= WhiteQueenSideCastle
-		}
-
-		if fromTo&(BB_SQ_H8|BB_SQ_E8) != 0 {
-			p.CastlingRights &^= BlackKingSideCastle
-		}
-
-		if fromTo&(BB_SQ_A8|BB_SQ_E8) != 0 {
-			p.CastlingRights &^= BlackQueenSideCastle
-		}
+		p.move(piece, us, from, to)
+		p.updateCastlingRights(from | to)
 	}
 
-	if m.Piece() != Pawn && !isCapture {
+	if !isCapture && piece != Pawn {
 		p.HalfMoves++
 	}
 
@@ -483,7 +390,16 @@ func Do(p *Position, m Move) {
 	}
 
 	p.WhiteToMove = !p.WhiteToMove
-	//return new
+}
+
+func (p *Position) updateCastlingRights(fromTo BitBoard) {
+	p.CastlingRights &^= WhiteKingSideCastle * CastlingRights((fromTo&BB_SQ_H1)>>SQ_H1)
+	p.CastlingRights &^= (WhiteKingSideCastle | WhiteQueenSideCastle) * CastlingRights((fromTo&BB_SQ_E1)>>SQ_E1)
+	p.CastlingRights &^= WhiteQueenSideCastle * CastlingRights((fromTo&BB_SQ_A1)>>SQ_A1)
+
+	p.CastlingRights &^= BlackKingSideCastle * CastlingRights((fromTo&BB_SQ_H8)>>SQ_H8)
+	p.CastlingRights &^= (BlackKingSideCastle | BlackQueenSideCastle) * CastlingRights((fromTo&BB_SQ_E8)>>SQ_E8)
+	p.CastlingRights &^= BlackQueenSideCastle * CastlingRights((fromTo&BB_SQ_A8)>>SQ_A8)
 }
 
 //func (p *Position) Undo () {}
@@ -515,7 +431,6 @@ func (p *Position) removeAll(color Color, sq BitBoard) {
 	p.Pieces[color][Bishop] &^= sq
 	p.Pieces[color][Rook] &^= sq
 	p.Pieces[color][Queen] &^= sq
-	//p.Pieces[color][King] &^= bit
 }
 
 func (p Position) Get(sq Square) Piece {
