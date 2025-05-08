@@ -64,16 +64,16 @@ func (m Move) To() Square {
 }
 
 func (m Move) Type() MoveType {
-	switch m >> 12 {
-	case 0x0c, 0x0d, 0x0e, 0x0f:
+	switch m & 0xf000 {
+	case 0xc000, 0xd000, 0xe000, 0xf000:
 		return Promotion
-	case 0x08:
+	case 0x8000:
 		return CastleKingSide
-	case 0x09:
+	case 0x9000:
 		return CastleQueenSide
-	case 0x0a:
+	case 0xa000:
 		return EnPassant
-	case 0x0b:
+	case 0xb000:
 		return DoublePush
 	default:
 		return Default
@@ -81,15 +81,15 @@ func (m Move) Type() MoveType {
 }
 
 func (m Move) Piece() Piece {
-	switch p := m >> 12; p {
-	case 0x0c, 0x0d, 0x0e, 0x0f:
+	switch p := m & 0xf000; p {
+	case 0xc000, 0xd000, 0xe000, 0xf000:
 		return Pawn
-	case 0x08, 0x09:
+	case 0x8000, 0x9000:
 		return King
-	case 0x0a, 0x0b:
+	case 0xa000, 0xb000:
 		return Pawn
 	default:
-		return Piece(p & 0x07)
+		return Piece(p >> 12 & 0x07)
 	}
 }
 
