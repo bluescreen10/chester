@@ -35,7 +35,7 @@ func minmax(p *Position, alpha, beta, depth int) (int, Move) {
 	moves, inCheck := LegalMoves(moves, p)
 
 	if inCheck && len(moves) == 0 {
-		if p.Active == White {
+		if p.Active() == White {
 			return math.MinInt, Move(0)
 		} else {
 			return math.MaxInt, Move(0)
@@ -46,7 +46,7 @@ func minmax(p *Position, alpha, beta, depth int) (int, Move) {
 		return 0, Move(0)
 	}
 
-	if p.Active == White {
+	if p.Active() == White {
 		max := math.MinInt
 		best := moves[0]
 		for _, m := range moves {
@@ -95,7 +95,7 @@ func eval(p *Position) int {
 	moves, inCheck := LegalMoves(moves, p)
 
 	if inCheck && len(moves) == 0 {
-		if p.Active == White {
+		if p.Active() == White {
 			return math.MinInt
 		} else {
 			return math.MaxInt

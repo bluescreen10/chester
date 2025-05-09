@@ -27,7 +27,8 @@ var pawnConfig [2]config = [2]config{
 }
 
 func LegalMoves(moves []Move, pos *Position) ([]Move, bool) {
-	us, them := pos.SideToMove()
+	us := pos.Active()
+	them := pos.Inactive()
 	king := pos.Pieces[us][King]
 	kingSq, _ := king.PopLSB()
 

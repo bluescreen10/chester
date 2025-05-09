@@ -41,10 +41,10 @@ type Position struct {
 
 	EnPassantTarget BitBoard
 
-	FullMoves        uint16
-	HalfMoves        uint8
-	CastlingRights   CastlingRights
-	Active, Inactive Color
+	FullMoves      uint16
+	HalfMoves      uint8
+	CastlingRights CastlingRights
+	active         Color
 }
 
 func Parse(fen string) (Position, error) {
@@ -121,9 +121,9 @@ func Parse(fen string) (Position, error) {
 	// pos.State.Reset()
 
 	if parts[1] == "w" || parts[1] == "W" {
-		pos.Active, pos.Inactive = White, Black
+		pos.active = White
 	} else {
-		pos.Active, pos.Inactive = Black, White
+		pos.active = Black
 	}
 
 	for _, c := range parts[2] {
@@ -140,7 +140,7 @@ func Parse(fen string) (Position, error) {
 	}
 
 	if sq := SquareFromString(parts[3]); sq != SQ_NULL {
-		if pos.Active == White {
+		if pos.Active() == White {
 			pos.EnPassantTarget = NewBitBoardFromSquare(sq + 8)
 		} else {
 			pos.EnPassantTarget = NewBitBoardFromSquare(sq - 8)
@@ -210,8 +210,7 @@ func (p Position) Fen() string {
 
 	fen.WriteByte(' ')
 
-	stm, _ := p.SideToMove()
-	if stm == White {
+	if p.Active() == White {
 		fen.WriteByte('w')
 	} else {
 		fen.WriteByte('b')
@@ -240,7 +239,7 @@ func (p Position) Fen() string {
 	}
 
 	fen.WriteByte(' ')
-	if p.Active == White {
+	if p.Active() == White {
 		fen.WriteString((p.EnPassantTarget >> 8).Square().String())
 	} else {
 		fen.WriteString((p.EnPassantTarget << 8).Square().String())
@@ -294,8 +293,12 @@ func (p Position) String() string {
 	return builder.String()
 }
 
-func (p *Position) SideToMove() (Color, Color) {
-	return p.Active, p.Inactive
+func (p *Position) Active() Color {
+	return p.active
+}
+
+func (p *Position) Inactive() Color {
+	return Black - p.active
 }
 
 // func (p Position) EnPassantFile() BitBoard {
@@ -340,7 +343,7 @@ func (p *Position) CanBlackCastleQueenSide() bool {
 
 func Do(p *Position, m Move) {
 
-	us, them := p.SideToMove()
+	us, them := p.Active(), p.Inactive()
 	from := BitBoard(1) << m.From()
 	to := BitBoard(1) << m.To()
 	isCapture := p.AllPieces[them]&to != 0
@@ -384,11 +387,11 @@ func Do(p *Position, m Move) {
 		p.HalfMoves++
 	}
 
-	if p.Active == Black {
+	if us == Black {
 		p.FullMoves++
 	}
 
-	p.Active, p.Inactive = p.Inactive, p.Active
+	p.active = them
 }
 
 func (p *Position) updateCastlingRights(fromTo BitBoard) {
@@ -435,17 +438,17 @@ func (p *Position) removeAll(color Color, sq BitBoard) {
 func (p Position) Get(sq Square) Piece {
 	bit := BitBoard(1) << sq
 
-	if p.Pieces[p.Active][Pawn]&bit != 0 {
+	if p.Pieces[p.active][Pawn]&bit != 0 {
 		return Pawn
-	} else if p.Pieces[p.Active][Knight]&bit != 0 {
+	} else if p.Pieces[p.active][Knight]&bit != 0 {
 		return Knight
-	} else if p.Pieces[p.Active][Bishop]&bit != 0 {
+	} else if p.Pieces[p.active][Bishop]&bit != 0 {
 		return Bishop
-	} else if p.Pieces[p.Active][Rook]&bit != 0 {
+	} else if p.Pieces[p.active][Rook]&bit != 0 {
 		return Rook
-	} else if p.Pieces[p.Active][Queen]&bit != 0 {
+	} else if p.Pieces[p.active][Queen]&bit != 0 {
 		return Queen
-	} else if p.Pieces[p.Active][King]&bit != 0 {
+	} else if p.Pieces[p.active][King]&bit != 0 {
 		return King
 	}
 	return Empty
