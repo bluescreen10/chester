@@ -133,7 +133,7 @@ func TestEnPassant(t *testing.T) {
 		}
 
 		pawned.Do(&p, test.move)
-		if got := p.EnPassantTarget.Square(); got != test.enPassantTarget {
+		if got := p.EnPassantTarget().Square(); got != test.enPassantTarget {
 			t.Errorf("Do(%s) failed to update en passant square expected %s got %s", test.move, test.enPassantTarget, got)
 		}
 

@@ -106,17 +106,17 @@ func eval(p *Position) int {
 		return 0
 	}
 
-	wPawns := p.Pieces[White][Pawn].OnesCount()
-	wKnight := p.Pieces[White][Knight].OnesCount()
-	wBishop := p.Pieces[White][Bishop].OnesCount()
-	wRook := p.Pieces[White][Rook].OnesCount()
-	wQueen := p.Pieces[White][Queen].OnesCount()
+	wPawns := p.Pawn(White).OnesCount()
+	wKnight := p.Knight(White).OnesCount()
+	wBishop := p.Bishop(White).OnesCount()
+	wRook := p.Rook(White).OnesCount()
+	wQueen := p.Queen(White).OnesCount()
 
-	bPawns := p.Pieces[Black][Pawn].OnesCount()
-	bKnight := p.Pieces[Black][Knight].OnesCount()
-	bBishop := p.Pieces[Black][Bishop].OnesCount()
-	bRook := p.Pieces[Black][Rook].OnesCount()
-	bQueen := p.Pieces[Black][Queen].OnesCount()
+	bPawns := p.Pawn(Black).OnesCount()
+	bKnight := p.Knight(Black).OnesCount()
+	bBishop := p.Bishop(Black).OnesCount()
+	bRook := p.Rook(Black).OnesCount()
+	bQueen := p.Queen(Black).OnesCount()
 
 	return (int(wPawns) + int(wKnight)*3 + int(wBishop)*3 + int(wRook)*5 + int(wQueen)*9 -
 		int(bPawns) - int(bKnight)*3 - int(bBishop)*3 - int(bRook)*5 - int(bQueen*9)) * 100

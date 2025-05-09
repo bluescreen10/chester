@@ -26,26 +26,26 @@ var pawnConfig [2]config = [2]config{
 	{8, 7, 9, Rank_1, Rank_6, Rank_4},
 }
 
-func LegalMoves(moves []Move, pos *Position) ([]Move, bool) {
-	us := pos.Active()
-	them := pos.Inactive()
-	king := pos.Pieces[us][King]
+func LegalMoves(moves []Move, p *Position) ([]Move, bool) {
+	us := p.Active()
+	them := p.Inactive()
+	king := p.King(us)
 	kingSq, _ := king.PopLSB()
 
-	checkers, pinnedStraight, pinnedDiagonal := checkersAndPinned(pos, us, them, kingSq, king)
+	checkers, pinnedStraight, pinnedDiagonal := checkersAndPinned(p, us, them, kingSq, king)
 	pinned := pinnedStraight | pinnedDiagonal
 
 	inCheck := checkers != 0
 
 	mask := FullBoard
-	enemiesOrEmpty := ^pos.AllPieces[us]
+	enemiesOrEmpty := ^p.AllPieces(us)
 
 	switch checkers.OnesCount() {
 	case 1:
 		captureMask := checkers
 		pushMask := EmptyBoard
 
-		if (pos.Pieces[them][Bishop]|pos.Pieces[them][Rook]|pos.Pieces[them][Queen])&checkers != 0 {
+		if (p.Bishop(them)|p.Rook(them)|p.Queen(them))&checkers != 0 {
 			checkerSq, _ := checkers.PopLSB()
 			pushMask = squaresBetween[checkerSq][kingSq]
 		}
@@ -55,19 +55,19 @@ func LegalMoves(moves []Move, pos *Position) ([]Move, bool) {
 		// FIX ME: currently not working correctly because genBishopMoves and genRookMoves
 		// assume those are only bishop and rooks, and in the move they mark queens as
 		// either rooks or bishops
-		//bishopsAndQueens := (pos.Pieces[us][Bishop] | pos.Pieces[us][Queen]) &^ pinnedStraight
-		//rookAndQueens := (pos.Pieces[us][Rook] | pos.Pieces[us][Queen]) &^ pinnedDiagonal
-		bishopsAndQueens := (pos.Pieces[us][Bishop]) &^ pinnedStraight
-		rookAndQueens := (pos.Pieces[us][Rook]) &^ pinnedDiagonal
+		//bishopsAndQueens := (p.Pieces[us][Bishop] | p.Pieces[us][Queen]) &^ pinnedStraight
+		//rookAndQueens := (p.Pieces[us][Rook] | p.Pieces[us][Queen]) &^ pinnedDiagonal
+		bishopsAndQueens := (p.Bishop(us)) &^ pinnedStraight
+		rookAndQueens := (p.Rook(us)) &^ pinnedDiagonal
 
-		moves = genPawnMoves(moves, pos, us, them, mask, pinnedStraight, pinnedDiagonal, kingSq)
-		moves = genKnightMoves(moves, pos.Pieces[us][Knight]&^pinned, enemiesOrEmpty&mask)
-		moves = genBishopMoves(moves, bishopsAndQueens, pos.Occupied, enemiesOrEmpty&mask, pinnedDiagonal)
-		moves = genRookMoves(moves, rookAndQueens, pos.Occupied, enemiesOrEmpty&mask, pinnedStraight)
-		moves = genQueenMoves(moves, pos, us, mask, pinnedStraight, pinnedDiagonal)
-		moves = genKingMoves(moves, king, pos.Occupied, enemiesOrEmpty, pos, us, them, inCheck)
+		moves = genPawnMoves(moves, p, us, them, mask, pinnedStraight, pinnedDiagonal, kingSq)
+		moves = genKnightMoves(moves, p.Knight(us)&^pinned, enemiesOrEmpty&mask)
+		moves = genBishopMoves(moves, bishopsAndQueens, p.Occupied(), enemiesOrEmpty&mask, pinnedDiagonal)
+		moves = genRookMoves(moves, rookAndQueens, p.Occupied(), enemiesOrEmpty&mask, pinnedStraight)
+		moves = genQueenMoves(moves, p, us, mask, pinnedStraight, pinnedDiagonal)
+		moves = genKingMoves(moves, king, p.Occupied(), enemiesOrEmpty, p, us, them, inCheck)
 	default:
-		moves = genKingMoves(moves, king, pos.Occupied, enemiesOrEmpty, pos, us, them, false)
+		moves = genKingMoves(moves, king, p.Occupied(), enemiesOrEmpty, p, us, them, false)
 	}
 	return moves, inCheck
 }
@@ -76,15 +76,15 @@ func checkersAndPinned(p *Position, us, them Color, kingSq Square, king BitBoard
 	// king := p.Pieces[us][King]
 	// kingSq, _ := king.PopLSB()
 
-	checkers := knightMoves[kingSq] & p.Pieces[them][Knight]
+	checkers := knightMoves[kingSq] & p.Knight(them)
 	config := pawnConfig[us]
-	checkers |= (king & File_Not_A).RotateLeft(config.leftAttacks) & p.Pieces[them][Pawn]
-	checkers |= (king & File_Not_H).RotateLeft(config.rightAttacks) & p.Pieces[them][Pawn]
+	checkers |= (king & File_Not_A).RotateLeft(config.leftAttacks) & p.Pawn(them)
+	checkers |= (king & File_Not_H).RotateLeft(config.rightAttacks) & p.Pawn(them)
 
 	kingDiagonalRays := rays[NorthWest][kingSq] | rays[NorthEast][kingSq] | rays[SouthWest][kingSq] | rays[SouthEast][kingSq]
-	diagonalAttackers := (p.Pieces[them][Queen] | p.Pieces[them][Bishop])
+	diagonalAttackers := (p.Queen(them) | p.Bishop(them))
 
-	occupied := p.Occupied
+	occupied := p.Occupied()
 
 	var pinnedStraight, pinnedDiagonal BitBoard
 
@@ -104,7 +104,7 @@ func checkersAndPinned(p *Position, us, them Color, kingSq Square, king BitBoard
 	}
 
 	kingStraightRays := rays[North][kingSq] | rays[South][kingSq] | rays[East][kingSq] | rays[West][kingSq]
-	straightAttackers := (p.Pieces[them][Queen] | p.Pieces[them][Rook])
+	straightAttackers := (p.Queen(them) | p.Rook(them))
 
 	for potentialCheckers := straightAttackers & kingStraightRays; potentialCheckers != 0; {
 		var sq Square
@@ -124,7 +124,7 @@ func checkersAndPinned(p *Position, us, them Color, kingSq Square, king BitBoard
 }
 
 func genPawnsAttacks(p *Position, us Color) BitBoard {
-	pawns := p.Pieces[us][Pawn]
+	pawns := p.Pawn(us)
 	config := pawnConfig[us]
 
 	left := (pawns & File_Not_A).RotateLeft(config.leftAttacks)
@@ -135,7 +135,7 @@ func genPawnsAttacks(p *Position, us Color) BitBoard {
 func genKnightsAttacks(p *Position, us Color) BitBoard {
 	var attacks BitBoard
 
-	knights := p.Pieces[us][Knight]
+	knights := p.Knight(us)
 
 	for knights != 0 {
 		var sq Square
@@ -149,8 +149,8 @@ func genKnightsAttacks(p *Position, us Color) BitBoard {
 func genBishopsAttacks(p *Position, us, them Color) BitBoard {
 	var attacks BitBoard
 
-	bishops := p.Pieces[us][Bishop]
-	occupied := p.Occupied &^ p.Pieces[them][King]
+	bishops := p.Bishop(us)
+	occupied := p.Occupied() &^ p.King(them)
 
 	for bishops != 0 {
 		var sq Square
@@ -172,8 +172,8 @@ func genBishopAttacks(sq Square, occupied BitBoard) BitBoard {
 func genRooksAttacks(p *Position, us, them Color) BitBoard {
 	var attacks BitBoard
 
-	rooks := p.Pieces[us][Rook]
-	occupied := p.Occupied &^ p.Pieces[them][King]
+	rooks := p.Rook(us)
+	occupied := p.Occupied() &^ p.King(them)
 
 	for rooks != 0 {
 		var sq Square
@@ -195,8 +195,8 @@ func genRookAttacks(sq Square, occupied BitBoard) BitBoard {
 func genQueensAttacks(p *Position, us, them Color) BitBoard {
 	var attacks BitBoard
 
-	queens := p.Pieces[us][Queen]
-	occupied := p.Occupied &^ p.Pieces[them][King]
+	queens := p.Queen(us)
+	occupied := p.Occupied() &^ p.King(them)
 
 	for queens != 0 {
 		var sq Square
@@ -208,15 +208,15 @@ func genQueensAttacks(p *Position, us, them Color) BitBoard {
 }
 
 func genKingAttacks(p *Position, us Color) BitBoard {
-	king := p.Pieces[us][King]
+	king := p.King(us)
 	sq, _ := king.PopLSB()
 	return kingMoves[sq]
 }
 
 func genPawnMoves(moves []Move, p *Position, us, them Color, moveMask, pinnedStraight, pinnedDiagonal BitBoard, kingSq Square) []Move {
-	pawns := p.Pieces[us][Pawn]
-	occupied := p.Occupied
-	enemies := p.AllPieces[them]
+	pawns := p.Pawn(us)
+	occupied := p.Occupied()
+	enemies := p.AllPieces(them)
 	//kingSq, _ := p.Pieces[us][King].PopLSB()
 	cfg := pawnConfig[us]
 
@@ -226,9 +226,9 @@ func genPawnMoves(moves []Move, p *Position, us, them Color, moveMask, pinnedStr
 	moves = genForwardMoves(moves, cfg, pawnsNotPinnedDiagonal, occupied, moveMask, pinnedStraight)
 	moves = genLeftAttackMoves(moves, cfg, pawnsNotPinnedStraight, enemies, moveMask, pinnedDiagonal)
 	moves = genRightAttackMoves(moves, cfg, pawnsNotPinnedStraight, enemies, moveMask, pinnedDiagonal)
-	if p.EnPassantTarget != 0 {
-		enemyQueenOrRooks := p.Pieces[them][Queen] | p.Pieces[them][Rook]
-		moves = genEnPassantMoves(moves, cfg, pawns&cfg.enPassantRank, occupied, p.EnPassantTarget&moveMask, enemyQueenOrRooks, pinnedStraight|pinnedDiagonal, kingSq)
+	if ep := p.EnPassantTarget() & moveMask; ep != 0 {
+		enemyQueenOrRooks := p.Queen(them) | p.Rook(them)
+		moves = genEnPassantMoves(moves, cfg, pawns&cfg.enPassantRank, occupied, ep, enemyQueenOrRooks, pinnedStraight|pinnedDiagonal, kingSq)
 	}
 
 	return moves
@@ -436,9 +436,9 @@ func genRookMoves(moves []Move, rooks, occupied, enemiesOrEmpty, pinned BitBoard
 }
 
 func genQueenMoves(moves []Move, p *Position, us Color, moveMask, pinnedStraight, pinnedDiagonal BitBoard) []Move {
-	queens := p.Pieces[us][Queen]
-	enemiesOrEmpty := ^p.AllPieces[us] & moveMask
-	occupied := p.Occupied
+	queens := p.Queen(us)
+	enemiesOrEmpty := ^p.AllPieces(us) & moveMask
+	occupied := p.Occupied()
 	pinned := pinnedStraight | pinnedDiagonal
 
 	for q := queens & pinnedDiagonal; q != 0; {
@@ -493,7 +493,7 @@ func genKingMoves(moves []Move, king, occupied, enemiesOrEmpty BitBoard, p *Posi
 		return moves
 	}
 
-	enemyKing := p.Pieces[them][King]
+	enemyKing := p.King(them)
 	attacked := attacks(p, them, us)
 
 	for targets := potentialTargets &^ (enemyKing | attacked); targets != 0; {

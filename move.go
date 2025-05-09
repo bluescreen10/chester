@@ -32,7 +32,7 @@ const (
 type Move uint16
 
 func NewMove(from, to Square, piece Piece) Move {
-	return Move(piece)<<12 | Move(from)<<6 | Move(to)
+	return Move(piece>>1)<<12 | Move(from)<<6 | Move(to)
 }
 
 func NewDoublePushMove(from, to Square) Move {
@@ -52,7 +52,7 @@ func NewCastleQueenSideMove(from, to Square) Move {
 }
 
 func NewPromotionMove(from, to Square, promotion Piece) Move {
-	return Move(0x0c|promotion)<<12 | Move(from)<<6 | Move(to)
+	return Move((0x0c|(promotion>>1))<<12) | Move(from)<<6 | Move(to)
 }
 
 func (m Move) From() Square {
@@ -89,12 +89,12 @@ func (m Move) Piece() Piece {
 	case 0xa000, 0xb000:
 		return Pawn
 	default:
-		return Piece(p >> 12 & 0x07)
+		return Piece(p>>12&0x07) << 1
 	}
 }
 
 func (m Move) PromoPiece() Piece {
-	return Piece(m >> 12 & 0x03)
+	return Piece(m>>12&0x03) << 1
 }
 
 func ParseMove(m string, p Position) (Move, error) {
