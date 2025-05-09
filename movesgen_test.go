@@ -79,7 +79,7 @@ func TestLegalMoves(t *testing.T) {
 		}
 		var moves []pawned.Move
 		var got []string
-		pawned.LegalMoves(&moves, &p)
+		moves, _ = pawned.LegalMoves(moves, &p)
 		for _, move := range moves {
 			got = append(got, move.String())
 		}
@@ -171,7 +171,7 @@ func TestWhitePawnMoves(t *testing.T) {
 		}
 		var moves []pawned.Move
 		var got []string
-		pawned.LegalMoves(&moves, &p)
+		moves, _ = pawned.LegalMoves(moves, &p)
 		for _, move := range moves {
 			got = append(got, move.String())
 		}
@@ -259,7 +259,7 @@ func TestBlackPawnMoves(t *testing.T) {
 
 		var moves []pawned.Move
 		var got []string
-		pawned.LegalMoves(&moves, &p)
+		moves, _ = pawned.LegalMoves(moves, &p)
 		for _, move := range moves {
 			got = append(got, move.String())
 		}
@@ -293,7 +293,7 @@ func TestWhiteKnightMoves(t *testing.T) {
 		}
 		var moves []pawned.Move
 		var got []string
-		pawned.LegalMoves(&moves, &p)
+		moves, _ = pawned.LegalMoves(moves, &p)
 		for _, move := range moves {
 			got = append(got, move.String())
 		}
@@ -323,7 +323,7 @@ func TestBlackKnightMoves(t *testing.T) {
 		}
 		var moves []pawned.Move
 		var got []string
-		pawned.LegalMoves(&moves, &p)
+		moves, _ = pawned.LegalMoves(moves, &p)
 		for _, move := range moves {
 			got = append(got, move.String())
 		}
@@ -353,7 +353,7 @@ func TestWhiteBishopMoves(t *testing.T) {
 		}
 		var moves []pawned.Move
 		var got []string
-		pawned.LegalMoves(&moves, &p)
+		moves, _ = pawned.LegalMoves(moves, &p)
 		for _, move := range moves {
 			got = append(got, move.String())
 		}
@@ -383,7 +383,7 @@ func TestBlackBishopMoves(t *testing.T) {
 		}
 		var moves []pawned.Move
 		var got []string
-		pawned.LegalMoves(&moves, &p)
+		moves, _ = pawned.LegalMoves(moves, &p)
 		for _, move := range moves {
 			got = append(got, move.String())
 		}
@@ -413,7 +413,7 @@ func TestWhiteRookMoves(t *testing.T) {
 		}
 		var moves []pawned.Move
 		var got []string
-		pawned.LegalMoves(&moves, &p)
+		moves, _ = pawned.LegalMoves(moves, &p)
 		for _, move := range moves {
 			got = append(got, move.String())
 		}
@@ -443,7 +443,7 @@ func TestBlackRookMoves(t *testing.T) {
 		}
 		var moves []pawned.Move
 		var got []string
-		pawned.LegalMoves(&moves, &p)
+		moves, _ = pawned.LegalMoves(moves, &p)
 		for _, move := range moves {
 			got = append(got, move.String())
 		}
@@ -497,7 +497,7 @@ func TestWhiteQueenMoves(t *testing.T) {
 		}
 		var moves []pawned.Move
 		var got []string
-		pawned.LegalMoves(&moves, &p)
+		moves, _ = pawned.LegalMoves(moves, &p)
 		for _, move := range moves {
 			got = append(got, move.String())
 		}
@@ -527,7 +527,7 @@ func TestBlackQueenMoves(t *testing.T) {
 		}
 		var moves []pawned.Move
 		var got []string
-		pawned.LegalMoves(&moves, &p)
+		moves, _ = pawned.LegalMoves(moves, &p)
 		for _, move := range moves {
 			got = append(got, move.String())
 		}
@@ -582,7 +582,7 @@ func TestWhiteKingMoves(t *testing.T) {
 		}
 		var moves []pawned.Move
 		var got []string
-		pawned.LegalMoves(&moves, &p)
+		moves, _ = pawned.LegalMoves(moves, &p)
 		for _, move := range moves {
 			got = append(got, move.String())
 		}
@@ -637,7 +637,7 @@ func TestBlackKingMoves(t *testing.T) {
 		}
 		var moves []pawned.Move
 		var got []string
-		pawned.LegalMoves(&moves, &p)
+		moves, _ = pawned.LegalMoves(moves, &p)
 		for _, move := range moves {
 			got = append(got, move.String())
 		}

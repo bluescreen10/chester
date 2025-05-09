@@ -32,7 +32,7 @@ func minmax(p *Position, alpha, beta, depth int) (int, Move) {
 		return eval(p), Move(0)
 	}
 	moves := make([]Move, 0, 218)
-	inCheck := LegalMoves(&moves, p)
+	moves, inCheck := LegalMoves(moves, p)
 
 	if inCheck && len(moves) == 0 {
 		if p.WhiteToMove {
@@ -92,7 +92,7 @@ func minmax(p *Position, alpha, beta, depth int) (int, Move) {
 
 func eval(p *Position) int {
 	moves := make([]Move, 0)
-	inCheck := LegalMoves(&moves, p)
+	moves, inCheck := LegalMoves(moves, p)
 
 	if inCheck && len(moves) == 0 {
 		if p.WhiteToMove {
