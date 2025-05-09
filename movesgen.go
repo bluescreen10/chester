@@ -86,7 +86,6 @@ func checkersAndPinned(p *Position, us, them Color, kingSq Square, king BitBoard
 	occupied := p.Occupied
 
 	var pinnedStraight, pinnedDiagonal BitBoard
-	friends := p.AllPieces[us]
 
 	for potentialCheckers := diagonalAttackers & kingDiagonalRays; potentialCheckers != 0; {
 		var sq Square
@@ -98,9 +97,8 @@ func checkersAndPinned(p *Position, us, them Color, kingSq Square, king BitBoard
 		case 0:
 			checkers |= 1 << sq
 		case 1:
-			if path&friends != 0 {
-				pinnedDiagonal |= lineFromTo[kingSq][sq]
-			}
+
+			pinnedDiagonal |= lineFromTo[kingSq][sq]
 		}
 	}
 
@@ -117,9 +115,7 @@ func checkersAndPinned(p *Position, us, them Color, kingSq Square, king BitBoard
 		case 0:
 			checkers |= 1 << sq
 		case 1:
-			if path&friends != 0 {
-				pinnedStraight |= lineFromTo[kingSq][sq]
-			}
+			pinnedStraight |= lineFromTo[kingSq][sq]
 		}
 	}
 
