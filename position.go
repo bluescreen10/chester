@@ -41,10 +41,10 @@ type Position struct {
 
 	EnPassantTarget BitBoard
 
-	FullMoves      uint16
-	HalfMoves      uint8
-	CastlingRights CastlingRights
-	WhiteToMove    bool
+	FullMoves        uint16
+	HalfMoves        uint8
+	CastlingRights   CastlingRights
+	Active, Inactive Color
 }
 
 func Parse(fen string) (Position, error) {
@@ -121,7 +121,9 @@ func Parse(fen string) (Position, error) {
 	// pos.State.Reset()
 
 	if parts[1] == "w" || parts[1] == "W" {
-		pos.WhiteToMove = true
+		pos.Active, pos.Inactive = White, Black
+	} else {
+		pos.Active, pos.Inactive = Black, White
 	}
 
 	for _, c := range parts[2] {
@@ -138,7 +140,7 @@ func Parse(fen string) (Position, error) {
 	}
 
 	if sq := SquareFromString(parts[3]); sq != SQ_NULL {
-		if pos.WhiteToMove {
+		if pos.Active == White {
 			pos.EnPassantTarget = NewBitBoardFromSquare(sq + 8)
 		} else {
 			pos.EnPassantTarget = NewBitBoardFromSquare(sq - 8)
@@ -238,7 +240,7 @@ func (p Position) Fen() string {
 	}
 
 	fen.WriteByte(' ')
-	if p.WhiteToMove {
+	if p.Active == White {
 		fen.WriteString((p.EnPassantTarget >> 8).Square().String())
 	} else {
 		fen.WriteString((p.EnPassantTarget << 8).Square().String())
@@ -293,10 +295,7 @@ func (p Position) String() string {
 }
 
 func (p *Position) SideToMove() (Color, Color) {
-	if p.WhiteToMove {
-		return White, Black
-	}
-	return Black, White
+	return p.Active, p.Inactive
 }
 
 // func (p Position) EnPassantFile() BitBoard {
@@ -385,11 +384,11 @@ func Do(p *Position, m Move) {
 		p.HalfMoves++
 	}
 
-	if !p.WhiteToMove {
+	if p.Active == Black {
 		p.FullMoves++
 	}
 
-	p.WhiteToMove = !p.WhiteToMove
+	p.Active, p.Inactive = p.Inactive, p.Active
 }
 
 func (p *Position) updateCastlingRights(fromTo BitBoard) {
@@ -435,34 +434,19 @@ func (p *Position) removeAll(color Color, sq BitBoard) {
 
 func (p Position) Get(sq Square) Piece {
 	bit := BitBoard(1) << sq
-	if p.WhiteToMove {
-		if p.Pieces[White][Pawn]&bit != 0 {
-			return Pawn
-		} else if p.Pieces[White][Knight]&bit != 0 {
-			return Knight
-		} else if p.Pieces[White][Bishop]&bit != 0 {
-			return Bishop
-		} else if p.Pieces[White][Rook]&bit != 0 {
-			return Rook
-		} else if p.Pieces[White][Queen]&bit != 0 {
-			return Queen
-		} else if p.Pieces[White][King]&bit != 0 {
-			return King
-		}
-	} else {
-		if p.Pieces[Black][Pawn]&bit != 0 {
-			return Pawn
-		} else if p.Pieces[Black][Knight]&bit != 0 {
-			return Knight
-		} else if p.Pieces[Black][Bishop]&bit != 0 {
-			return Bishop
-		} else if p.Pieces[Black][Rook]&bit != 0 {
-			return Rook
-		} else if p.Pieces[Black][Queen]&bit != 0 {
-			return Queen
-		} else if p.Pieces[Black][King]&bit != 0 {
-			return King
-		}
+
+	if p.Pieces[p.Active][Pawn]&bit != 0 {
+		return Pawn
+	} else if p.Pieces[p.Active][Knight]&bit != 0 {
+		return Knight
+	} else if p.Pieces[p.Active][Bishop]&bit != 0 {
+		return Bishop
+	} else if p.Pieces[p.Active][Rook]&bit != 0 {
+		return Rook
+	} else if p.Pieces[p.Active][Queen]&bit != 0 {
+		return Queen
+	} else if p.Pieces[p.Active][King]&bit != 0 {
+		return King
 	}
 	return Empty
 }

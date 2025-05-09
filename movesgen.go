@@ -506,7 +506,7 @@ func genKingMoves(moves []Move, king, occupied, enemiesOrEmpty BitBoard, p *Posi
 	}
 
 	// castling
-	if p.WhiteToMove {
+	if us == White {
 		if p.CanWhiteCastleKingSide() {
 			if WhiteKingSideCastleFree&occupied == 0 && WhiteKingSideCastleNotAttacked&attacked == 0 {
 				moves = append(moves, NewCastleKingSideMove(SQ_E1, SQ_G1))
