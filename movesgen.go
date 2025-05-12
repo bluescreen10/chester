@@ -125,15 +125,16 @@ func genKnightsAttacks(p *Position, us Color) BitBoard {
 	return attacks
 }
 
-func genBishopsAttacks(p *Position, us, them Color) BitBoard {
+func genDiagonalAttacks(p *Position, us, them Color) BitBoard {
 	var attacks BitBoard
 
-	bishops := p.Pieces[us][Bishop]
+	attacker := p.Pieces[us][Bishop] | p.Pieces[us][Queen]
 	occupied := p.Occupied &^ p.Pieces[them][King]
 
-	for bishops != 0 {
-		var sq Square
-		sq, bishops = bishops.PopLSB()
+	var sq Square
+
+	for attacker != 0 {
+		sq, attacker = attacker.PopLSB()
 		attacks |= genBishopAttacks(sq, occupied)
 	}
 
@@ -148,15 +149,16 @@ func genBishopAttacks(sq Square, occupied BitBoard) BitBoard {
 	return BishopMagic[sq].Attacks[occupied]
 }
 
-func genRooksAttacks(p *Position, us, them Color) BitBoard {
+func genStraightAttacks(p *Position, us, them Color) BitBoard {
 	var attacks BitBoard
 
-	rooks := p.Pieces[us][Rook]
+	attackers := p.Pieces[us][Rook] | p.Pieces[us][Queen]
 	occupied := p.Occupied &^ p.Pieces[them][King]
 
-	for rooks != 0 {
-		var sq Square
-		sq, rooks = rooks.PopLSB()
+	var sq Square
+
+	for attackers != 0 {
+		sq, attackers = attackers.PopLSB()
 		attacks |= genRookAttacks(sq, occupied)
 	}
 
@@ -169,21 +171,6 @@ func genRookAttacks(sq Square, occupied BitBoard) BitBoard {
 	occupied *= RookMagic[sq].Magic
 	occupied >>= RookMagic[sq].Shift
 	return RookMagic[sq].Attacks[occupied]
-}
-
-func genQueensAttacks(p *Position, us, them Color) BitBoard {
-	var attacks BitBoard
-
-	queens := p.Pieces[us][Queen]
-	occupied := p.Occupied &^ p.Pieces[them][King]
-
-	for queens != 0 {
-		var sq Square
-		sq, queens = queens.PopLSB()
-		attacks |= genBishopAttacks(sq, occupied) | genRookAttacks(sq, occupied)
-	}
-
-	return attacks
 }
 
 func genKingAttacks(p *Position, us Color) BitBoard {
@@ -505,8 +492,7 @@ func genKingMoves(moves []Move, p *Position, inCheck bool) []Move {
 func attacks(p *Position, us, them Color) BitBoard {
 	return genPawnsAttacks(p, us) |
 		genKnightsAttacks(p, us) |
-		genBishopsAttacks(p, us, them) |
-		genRooksAttacks(p, us, them) |
-		genQueensAttacks(p, us, them) |
+		genDiagonalAttacks(p, us, them) |
+		genStraightAttacks(p, us, them) |
 		genKingAttacks(p, us)
 }
