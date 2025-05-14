@@ -43,11 +43,11 @@ func main() {
 	generateRays(buf)
 	generateKnightMoves(buf)
 	generateKingMoves(buf)
-	generateSquaresBetween(buf)
+	//generateSquaresBetween(buf)
 	generateLineFromTo(buf)
 	generateFileRankMasks(buf)
 	generateSquares(buf)
-	genEnPassantNeighbours(buf)
+	//genEnPassantNeighbours(buf)
 	genMagicnumbers(buf)
 
 	src, err := format.Source(buf.Bytes())
@@ -196,51 +196,51 @@ func calculateKingMoves() [64]uint64 {
 	return kingMoves
 }
 
-func generateSquaresBetween(w io.Writer) {
-	squaresBetween := calculateSquaresBetween()
+// func generateSquaresBetween(w io.Writer) {
+// 	squaresBetween := calculateSquaresBetween()
 
-	fmt.Fprintf(w, "var squaresBetween [Square(64)][Square(64)]BitBoard = [Square(64)][Square(64)]BitBoard{\n")
-	for i := range 64 {
-		fmt.Fprintf(w, "\t{\n")
-		for j := range 64 {
-			fmt.Fprintf(w, "\t\t%d,\n", squaresBetween[i][j])
-		}
-		fmt.Fprintf(w, "\t},\n")
-	}
-	fmt.Fprintf(w, "}\n")
-}
+// 	fmt.Fprintf(w, "var squaresBetween [Square(64)][Square(64)]BitBoard = [Square(64)][Square(64)]BitBoard{\n")
+// 	for i := range 64 {
+// 		fmt.Fprintf(w, "\t{\n")
+// 		for j := range 64 {
+// 			fmt.Fprintf(w, "\t\t%d,\n", squaresBetween[i][j])
+// 		}
+// 		fmt.Fprintf(w, "\t},\n")
+// 	}
+// 	fmt.Fprintf(w, "}\n")
+// }
 
-func calculateSquaresBetween() [64][64]uint64 {
-	squaresBetween := [64][64]uint64{}
-	rays := calculateRays()
+// func calculateSquaresBetween() [64][64]uint64 {
+// 	squaresBetween := [64][64]uint64{}
+// 	rays := calculateRays()
 
-	for i := range 64 {
-		for j := range 64 {
-			if i == j {
-				continue
-			}
+// 	for i := range 64 {
+// 		for j := range 64 {
+// 			if i == j {
+// 				continue
+// 			}
 
-			r1, f1 := sqaureToRankAndFile(i)
-			r2, f2 := sqaureToRankAndFile(j)
+// 			r1, f1 := sqaureToRankAndFile(i)
+// 			r2, f2 := sqaureToRankAndFile(j)
 
-			if r1 == r2 || f1 == f2 {
-				squaresBetween[i][j] =
-					(rays[North][i] & rays[South][j]) |
-						(rays[South][i] & rays[North][j]) |
-						(rays[East][i] & rays[West][j]) |
-						(rays[West][i] & rays[East][j])
-			} else if abs(r1-r2) == abs(f1-f2) {
-				squaresBetween[i][j] =
-					(rays[NorthEast][i] & rays[SouthWest][j]) |
-						(rays[SouthWest][i] & rays[NorthEast][j]) |
-						(rays[NorthWest][i] & rays[SouthEast][j]) |
-						(rays[SouthEast][i] & rays[NorthWest][j])
-			}
-		}
-	}
+// 			if r1 == r2 || f1 == f2 {
+// 				squaresBetween[i][j] =
+// 					(rays[North][i] & rays[South][j]) |
+// 						(rays[South][i] & rays[North][j]) |
+// 						(rays[East][i] & rays[West][j]) |
+// 						(rays[West][i] & rays[East][j])
+// 			} else if abs(r1-r2) == abs(f1-f2) {
+// 				squaresBetween[i][j] =
+// 					(rays[NorthEast][i] & rays[SouthWest][j]) |
+// 						(rays[SouthWest][i] & rays[NorthEast][j]) |
+// 						(rays[NorthWest][i] & rays[SouthEast][j]) |
+// 						(rays[SouthEast][i] & rays[NorthWest][j])
+// 			}
+// 		}
+// 	}
 
-	return squaresBetween
-}
+// 	return squaresBetween
+// }
 
 func generateLineFromTo(w io.Writer) {
 	linesFromTo := calculateLineFromTo()
@@ -272,40 +272,40 @@ func calculateLineFromTo() [64][64]uint64 {
 				if f1 < f2 {
 					lineFromTo[i][j] = rays[East][i] &^ rays[East][j]
 					lineFromTo[i][j] |= (1 << j)
-					lineFromTo[i][j] |= (1 << i)
+					//lineFromTo[i][j] |= (1 << i)
 
 				} else {
 					lineFromTo[i][j] = rays[West][i] &^ rays[West][j]
 					lineFromTo[i][j] |= (1 << j)
-					lineFromTo[i][j] |= (1 << i)
+					//lineFromTo[i][j] |= (1 << i)
 				}
 			} else if f1 == f2 {
 				if r1 < r2 {
 					lineFromTo[i][j] = rays[North][i] &^ rays[North][j]
 					lineFromTo[i][j] |= (1 << j)
-					lineFromTo[i][j] |= (1 << i)
+					//lineFromTo[i][j] |= (1 << i)
 				} else {
 					lineFromTo[i][j] = rays[South][i] &^ rays[South][j]
 					lineFromTo[i][j] |= (1 << j)
-					lineFromTo[i][j] |= (1 << i)
+					//lineFromTo[i][j] |= (1 << i)
 				}
 			} else if abs(r1-r2) == abs(f1-f2) {
 				if r1 < r2 && f1 < f2 {
 					lineFromTo[i][j] = rays[NorthEast][i] &^ rays[NorthEast][j]
 					lineFromTo[i][j] |= (1 << j)
-					lineFromTo[i][j] |= (1 << i)
+					//lineFromTo[i][j] |= (1 << i)
 				} else if r1 < r2 && f1 > f2 {
 					lineFromTo[i][j] = rays[NorthWest][i] &^ rays[NorthWest][j]
 					lineFromTo[i][j] |= (1 << j)
-					lineFromTo[i][j] |= (1 << i)
+					//lineFromTo[i][j] |= (1 << i)
 				} else if r1 > r2 && f1 < f2 {
 					lineFromTo[i][j] = rays[SouthEast][i] &^ rays[SouthEast][j]
 					lineFromTo[i][j] |= (1 << j)
-					lineFromTo[i][j] |= (1 << i)
+					//lineFromTo[i][j] |= (1 << i)
 				} else {
 					lineFromTo[i][j] = rays[SouthWest][i] &^ rays[SouthWest][j]
 					lineFromTo[i][j] |= (1 << j)
-					lineFromTo[i][j] |= (1 << i)
+					//lineFromTo[i][j] |= (1 << i)
 				}
 			}
 		}
@@ -341,27 +341,27 @@ func generateFileRankMasks(w io.Writer) {
 	fmt.Fprintf(w, ")\n")
 }
 
-func genEnPassantNeighbours(w io.Writer) {
-	fmt.Fprintf(w, "var enPassantNeighbours [Square(64)]BitBoard = [Square(64)]BitBoard{\n")
-	for i := range 64 {
-		if i < 23 || i > 40 {
-			fmt.Fprintf(w, "\t0,\n")
-		} else {
-			mask := uint64(1 << i)
-			_, f := sqaureToRankAndFile(i)
+// func genEnPassantNeighbours(w io.Writer) {
+// 	fmt.Fprintf(w, "var enPassantNeighbours [Square(64)]BitBoard = [Square(64)]BitBoard{\n")
+// 	for i := range 64 {
+// 		if i < 23 || i > 40 {
+// 			fmt.Fprintf(w, "\t0,\n")
+// 		} else {
+// 			mask := uint64(1 << i)
+// 			_, f := sqaureToRankAndFile(i)
 
-			if f != 0 {
-				mask |= uint64(1<<i - 1)
-			}
+// 			if f != 0 {
+// 				mask |= uint64(1<<i - 1)
+// 			}
 
-			if f != 7 {
-				mask |= uint64(1<<i + 1)
-			}
-			fmt.Fprintf(w, "\t%d,\n", mask)
-		}
-	}
-	fmt.Fprintf(w, "}\n")
-}
+// 			if f != 7 {
+// 				mask |= uint64(1<<i + 1)
+// 			}
+// 			fmt.Fprintf(w, "\t%d,\n", mask)
+// 		}
+// 	}
+// 	fmt.Fprintf(w, "}\n")
+// }
 
 func generateSquares(w io.Writer) {
 	fmt.Fprintf(w, "const (\n")

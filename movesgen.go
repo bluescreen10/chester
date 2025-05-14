@@ -30,14 +30,17 @@ func LegalMoves(moves []Move, p *Position) ([]Move, bool) {
 		inCheck = false
 		fallthrough
 	case 1:
-		moves = genPawnForwardMoves(moves, p, cpm)
-		moves = genPawnLeftAttackMoves(moves, p, cpm)
-		moves = genPawnRightAttackMoves(moves, p, cpm)
-		moves = genPawnEnPassantMoves(moves, p, cpm)
-		moves = genKnightMoves(moves, p, cpm)
-		moves = genBishopMoves(moves, p, cpm)
-		moves = genRookMoves(moves, p, cpm)
-		moves = genQueenMoves(moves, p, cpm)
+		moves = genPawnForwardMoves(moves, p, &cpm)
+		moves = genPawnLeftAttackMoves(moves, p, &cpm)
+		moves = genPawnRightAttackMoves(moves, p, &cpm)
+
+		if p.EnPassantTarget != 0 {
+			moves = genPawnEnPassantMoves(moves, p, &cpm)
+		}
+		moves = genKnightMoves(moves, p, &cpm)
+		moves = genBishopMoves(moves, p, &cpm)
+		moves = genRookMoves(moves, p, &cpm)
+		moves = genQueenMoves(moves, p, &cpm)
 		fallthrough
 	default:
 		moves = genKingMoves(moves, p, inCheck)
@@ -45,7 +48,7 @@ func LegalMoves(moves []Move, p *Position) ([]Move, bool) {
 	return moves, inCheck
 }
 
-func checkersAndPinned(p *Position) *checkersPinsAndMask {
+func checkersAndPinned(p *Position) checkersPinsAndMask {
 	us := p.Active()
 	them := p.Inactive()
 	king := p.Pieces[us][King]
@@ -68,14 +71,14 @@ func checkersAndPinned(p *Position) *checkersPinsAndMask {
 	for potentialCheckers := diagonalAttackers & kingDiagonalRays; potentialCheckers != 0; {
 		sq, potentialCheckers = potentialCheckers.PopLSB()
 
-		path := squaresBetween[sq][kingSq]
+		path := lineFromTo[kingSq][sq]
 		potentialyPinned := path & p.Occupied
 		switch potentialyPinned.OnesCount() {
-		case 0:
+		case 1:
 			cpm.checkers |= 1 << sq
 			cpm.moveMask |= path
-		case 1:
-			cpm.diagonalPins |= lineFromTo[kingSq][sq]
+		case 2:
+			cpm.diagonalPins |= path
 		}
 	}
 
@@ -85,20 +88,20 @@ func checkersAndPinned(p *Position) *checkersPinsAndMask {
 	for potentialCheckers := straightAttackers & kingStraightRays; potentialCheckers != 0; {
 		sq, potentialCheckers = potentialCheckers.PopLSB()
 
-		path := squaresBetween[sq][kingSq]
+		path := lineFromTo[kingSq][sq]
 		potentialyPinned := path & p.Occupied
 		switch potentialyPinned.OnesCount() {
-		case 0:
+		case 1:
 			cpm.checkers |= 1 << sq
 			cpm.moveMask |= path
-		case 1:
-			cpm.straightPins |= lineFromTo[kingSq][sq]
+		case 2:
+			cpm.straightPins |= path
 		}
 	}
 
 	cpm.moveMask |= cpm.checkers
 	cpm.allPins = cpm.diagonalPins | cpm.straightPins
-	return &cpm
+	return cpm
 }
 
 func genPawnsAttacks(p *Position, us Color) BitBoard {
@@ -282,10 +285,6 @@ func genPawnRightAttackMoves(moves []Move, p *Position, cpm *checkersPinsAndMask
 }
 
 func genPawnEnPassantMoves(moves []Move, p *Position, cpm *checkersPinsAndMask) []Move {
-	if p.EnPassantTarget == 0 {
-		return moves
-	}
-
 	const enPassantRanks = Rank_5 | Rank_4
 	us := p.Active()
 	them := p.Inactive()
