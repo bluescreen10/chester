@@ -43,7 +43,7 @@ func LegalMoves(moves []Move, p *Position) ([]Move, bool) {
 		moves = genQueenMoves(moves, p, &cpm)
 		fallthrough
 	default:
-		moves = genKingMoves(moves, p, inCheck)
+		moves = genKingMoves(moves, p)
 	}
 	return moves, inCheck
 }
@@ -119,8 +119,9 @@ func genKnightsAttacks(p *Position, us Color) BitBoard {
 
 	knights := p.Pieces[us][Knight]
 
+	var sq Square
+
 	for knights != 0 {
-		var sq Square
 		sq, knights = knights.PopLSB()
 		attacks |= knightMoves[sq]
 	}
@@ -292,7 +293,7 @@ func genPawnEnPassantMoves(moves []Move, p *Position, cpm *checkersPinsAndMask) 
 	kingSq, _ := p.Pieces[us][King].PopLSB()
 	enemyQueenOrRooks := p.Pieces[them][Queen] | p.Pieces[them][Rook]
 
-	pawnsOnRank := p.Pieces[us][Pawn] & enPassantRanks &^ cpm.allPins
+	pawnsOnRank := p.Pieces[us][Pawn] &^ cpm.allPins
 
 	left := pawnsOnRank & (File_Not_A & p.EnPassantTarget >> 1)
 	if left != 0 {
@@ -431,7 +432,7 @@ func genQueenMoves(moves []Move, p *Position, cpm *checkersPinsAndMask) []Move {
 	return moves
 }
 
-func genKingMoves(moves []Move, p *Position, inCheck bool) []Move {
+func genKingMoves(moves []Move, p *Position) []Move {
 	us := p.Active()
 	king := p.Pieces[us][King]
 	enemiesOrEmpty := ^p.AllPieces[us]
@@ -453,36 +454,33 @@ func genKingMoves(moves []Move, p *Position, inCheck bool) []Move {
 		moves = append(moves, NewMove(from, to, King))
 	}
 
-	if inCheck {
-		return moves
+	// castling
+	if us == White &&
+		p.CanWhiteCastleKingSide() &&
+		WhiteKingSideCastleFree&p.Occupied == 0 &&
+		WhiteKingSideCastleNotAttacked&attacked == 0 {
+		moves = append(moves, NewCastleKingSideMove(SQ_E1, SQ_G1))
 	}
 
-	// castling
-	if us == White {
-		if p.CanWhiteCastleKingSide() {
-			if WhiteKingSideCastleFree&p.Occupied == 0 && WhiteKingSideCastleNotAttacked&attacked == 0 {
-				moves = append(moves, NewCastleKingSideMove(SQ_E1, SQ_G1))
-			}
-		}
+	if us == White &&
+		p.CanWhiteCastleQueenSide() &&
+		WhiteQueenSideCastleFree&p.Occupied == 0 &&
+		WhiteQueenSideCastleNotAttacked&attacked == 0 {
+		moves = append(moves, NewCastleQueenSideMove(SQ_E1, SQ_C1))
+	}
 
-		if p.CanWhiteCastleQueenSide() {
+	if us == Black &&
+		p.CanBlackCastleKingSide() &&
+		BlackKingSideCastleFree&p.Occupied == 0 &&
+		BlackKingSideCastleNotAttacked&attacked == 0 {
+		moves = append(moves, NewCastleKingSideMove(SQ_E8, SQ_G8))
+	}
 
-			if WhiteQueenSideCastleFree&p.Occupied == 0 && WhiteQueenSideCastleNotAttacked&attacked == 0 {
-				moves = append(moves, NewCastleQueenSideMove(SQ_E1, SQ_C1))
-			}
-		}
-	} else {
-		if p.CanBlackCastleKingSide() {
-			if BlackKingSideCastleFree&p.Occupied == 0 && BlackKingSideCastleNotAttacked&attacked == 0 {
-				moves = append(moves, NewCastleKingSideMove(SQ_E8, SQ_G8))
-			}
-		}
-
-		if p.CanBlackCastleQueenSide() {
-			if BlackQueenSideCastleFree&p.Occupied == 0 && BlackQueenSideCastleNotAttacked&attacked == 0 {
-				moves = append(moves, NewCastleQueenSideMove(SQ_E8, SQ_C8))
-			}
-		}
+	if us == Black &&
+		p.CanBlackCastleQueenSide() &&
+		BlackQueenSideCastleFree&p.Occupied == 0 &&
+		BlackQueenSideCastleNotAttacked&attacked == 0 {
+		moves = append(moves, NewCastleQueenSideMove(SQ_E8, SQ_C8))
 	}
 
 	return moves
