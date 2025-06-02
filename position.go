@@ -41,10 +41,10 @@ type Position struct {
 
 	EnPassantTarget BitBoard
 
-	FullMoves      uint16
-	HalfMoves      uint8
-	CastlingRights CastlingRights
-	active         Color
+	FullMoves        uint16
+	HalfMoves        uint8
+	CastlingRights   CastlingRights
+	active, inactive Color
 }
 
 func Parse(fen string) (Position, error) {
@@ -122,8 +122,10 @@ func Parse(fen string) (Position, error) {
 
 	if parts[1] == "w" || parts[1] == "W" {
 		pos.active = White
+		pos.inactive = Black
 	} else {
 		pos.active = Black
+		pos.inactive = White
 	}
 
 	for _, c := range parts[2] {
@@ -298,7 +300,7 @@ func (p *Position) Active() Color {
 }
 
 func (p *Position) Inactive() Color {
-	return Black - p.active
+	return p.inactive
 }
 
 // func (p Position) EnPassantFile() BitBoard {
@@ -343,10 +345,9 @@ func (p *Position) CanBlackCastleQueenSide() bool {
 
 func Do(p *Position, m Move) {
 
-	us, them := p.Active(), p.Inactive()
 	from := BitBoard(1) << m.From()
 	to := BitBoard(1) << m.To()
-	isCapture := p.AllPieces[them]&to != 0
+	isCapture := p.Occupied&to != 0
 	piece := m.Piece()
 	enPassantTarget := p.EnPassantTarget
 	p.EnPassantTarget = 0
@@ -354,32 +355,32 @@ func Do(p *Position, m Move) {
 	switch m.Type() {
 	case Promotion:
 		if isCapture {
-			p.removeAll(them, to)
+			p.removeAll(p.inactive, to)
 			p.updateCastlingRights(from | to)
 		}
-		p.remove(Pawn, us, from)
-		p.put(m.PromoPiece(), us, to)
+		p.remove(Pawn, p.active, from)
+		p.put(m.PromoPiece(), p.active, to)
 
 	case EnPassant:
-		p.remove(Pawn, them, enPassantTarget)
-		p.move(Pawn, us, from, to)
+		p.remove(Pawn, p.inactive, enPassantTarget)
+		p.move(Pawn, p.active, from, to)
 	case CastleKingSide:
-		p.move(King, us, from, to)
-		p.move(Rook, us, from>>3, from>>1)
+		p.move(King, p.active, from, to)
+		p.move(Rook, p.active, from>>3, from>>1)
 		p.updateCastlingRights(from)
 
 	case CastleQueenSide:
-		p.move(King, us, from, to)
-		p.move(Rook, us, from<<4, from<<2)
+		p.move(King, p.active, from, to)
+		p.move(Rook, p.active, from<<4, from<<2)
 		p.updateCastlingRights(from)
 	case DoublePush:
-		p.move(Pawn, us, from, to)
+		p.move(Pawn, p.active, from, to)
 		p.EnPassantTarget = to
 	default:
 		if isCapture {
-			p.removeAll(them, to)
+			p.removeAll(p.inactive, to)
 		}
-		p.move(piece, us, from, to)
+		p.move(piece, p.active, from, to)
 		p.updateCastlingRights(from | to)
 	}
 
@@ -387,11 +388,11 @@ func Do(p *Position, m Move) {
 		p.HalfMoves++
 	}
 
-	if us == Black {
+	if p.active == Black {
 		p.FullMoves++
 	}
 
-	p.active = them
+	p.active, p.inactive = p.inactive, p.active
 }
 
 func (p *Position) updateCastlingRights(fromTo BitBoard) {
