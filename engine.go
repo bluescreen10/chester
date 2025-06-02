@@ -118,8 +118,8 @@ func eval(p *Position) int {
 	bRook := p.Pieces[Black][Rook].OnesCount()
 	bQueen := p.Pieces[Black][Queen].OnesCount()
 
-	return (int(wPawns) + int(wKnight)*3 + int(wBishop)*3 + int(wRook)*5 + int(wQueen)*9 -
-		int(bPawns) - int(bKnight)*3 - int(bBishop)*3 - int(bRook)*5 - int(bQueen*9)) * 100
+	return (wPawns + wKnight*3 + wBishop*3 + wRook*5 + wQueen*9 -
+		bPawns - bKnight*3 - bBishop*3 - bRook*5 - bQueen*9) * 100
 }
 
 func fmax(a, b int) int {
