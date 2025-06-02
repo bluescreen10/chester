@@ -56,8 +56,8 @@ func (b BitBoard) PopLSB() (Square, BitBoard) {
 	return s, b
 }
 
-func (b BitBoard) OnesCount() int8 {
-	return int8(bits.OnesCount64(uint64(b)))
+func (b BitBoard) OnesCount() int {
+	return bits.OnesCount64(uint64(b))
 }
 
 func (b BitBoard) RotateLeft(offset int) BitBoard {
