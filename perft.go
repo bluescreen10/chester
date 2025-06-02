@@ -34,21 +34,18 @@ func Perft(p *Position, depth int) <-chan MoveCount {
 
 func perft(p *Position, moves []Move, depth int) int {
 	moves, _ = LegalMoves(moves, p)
-	count := len(moves)
 
 	if depth == 1 {
-		return count
+		return len(moves)
 	}
 
 	var nodes int
 	var newPos Position
-
-	for i := 0; i < count; i++ {
-		m := moves[i]
+	m := moves[len(moves):]
+	for i := 0; i < len(moves); i++ {
 		newPos = *p
-		Do(&newPos, m)
-		newNodes := perft(&newPos, moves[count:], depth-1)
-		nodes += newNodes
+		Do(&newPos, moves[i])
+		nodes += perft(&newPos, m, depth-1)
 	}
 	return nodes
 }
