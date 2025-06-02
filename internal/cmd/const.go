@@ -413,9 +413,9 @@ func genMagicnumbers(w io.Writer) {
 			return rookAttacks(sq, occupied, rays)
 		}
 		rookBits := RookBits[sq]
-		magic, attacks := findMagicNumber(sq, rookBits, mask, attackFunc)
+		magic, attacks, max := findMagicNumber(sq, rookBits, mask, attackFunc)
 		fmt.Fprintf(w, " \n{[]BitBoard{\n")
-		for i := range attacks {
+		for i := range attacks[:max+1] {
 			fmt.Fprintf(w, "\t\t%d,\n", attacks[i])
 		}
 		fmt.Fprintf(w, "}, %d, %d, %d},\n", magic, mask, 64-rookBits)
@@ -444,9 +444,9 @@ func genMagicnumbers(w io.Writer) {
 			return bishopAttacks(sq, occupied, rays)
 		}
 		bishopBits := BishopBits[sq]
-		magic, attacks := findMagicNumber(sq, bishopBits, mask, attackFunc)
+		magic, attacks, max := findMagicNumber(sq, bishopBits, mask, attackFunc)
 		fmt.Fprintf(w, " \n{[]BitBoard{\n")
-		for i := range attacks {
+		for i := range attacks[:max+1] {
 			fmt.Fprintf(w, "\t\t%d,\n", attacks[i])
 		}
 		fmt.Fprintf(w, "}, %d, %d, %d},\n", magic, mask, 64-bishopBits)
@@ -454,13 +454,14 @@ func genMagicnumbers(w io.Writer) {
 	fmt.Fprintf(w, "};\n")
 }
 
-func findMagicNumber(sq, m int, mask uint64, attackFunc func(int, uint64) uint64) (uint64, []uint64) {
+func findMagicNumber(sq, m int, mask uint64, attackFunc func(int, uint64) uint64) (uint64, []uint64, int) {
 	//mask := RookMask(sq)
 	n := bits.OnesCount64(mask)
 
 	blockers := make([]uint64, 1<<n)
 	attacks := make([]uint64, 1<<n)
 	used := make([]uint64, 4096)
+	max := 0
 
 	// generate all possible blocker sets
 	for i := range 1 << n {
@@ -488,6 +489,9 @@ func findMagicNumber(sq, m int, mask uint64, attackFunc func(int, uint64) uint64
 			h := hash(blockers[i], magic, m)
 			if used[h] == 0 {
 				used[h] = attacks[i]
+				if h > max {
+					max = h
+				}
 			} else if used[h] != attacks[i] {
 				//collision detected
 				fail = true
@@ -496,7 +500,7 @@ func findMagicNumber(sq, m int, mask uint64, attackFunc func(int, uint64) uint64
 		}
 
 		if !fail {
-			return magic, used
+			return magic, used, max
 		}
 	}
 
