@@ -73,7 +73,7 @@ func checkersAndPinned(p *Position) checkersPinsAndMask {
 		sq, potentialCheckers = potentialCheckers.PopLSB()
 
 		path := lineFromTo[kingSq][sq]
-		potentialyPinned := path & p.Occupied
+		potentialyPinned := path & p.Occupied()
 		switch potentialyPinned.OnesCount() {
 		case 1:
 			cpm.checkers |= 1 << sq
@@ -90,7 +90,7 @@ func checkersAndPinned(p *Position) checkersPinsAndMask {
 		sq, potentialCheckers = potentialCheckers.PopLSB()
 
 		path := lineFromTo[kingSq][sq]
-		potentialyPinned := path & p.Occupied
+		potentialyPinned := path & p.Occupied()
 		switch potentialyPinned.OnesCount() {
 		case 1:
 			cpm.checkers |= 1 << sq
@@ -134,7 +134,7 @@ func genDiagonalAttacks(p *Position, us, them Color) BitBoard {
 	var attacks BitBoard
 
 	attacker := (p.Pieces[Bishop] | p.Pieces[Queen]) & p.AllPieces[us]
-	occupied := p.Occupied &^ (p.Pieces[King] & p.AllPieces[them])
+	occupied := p.Occupied() &^ (p.Pieces[King] & p.AllPieces[them])
 
 	var sq Square
 
@@ -158,7 +158,7 @@ func genStraightAttacks(p *Position, us, them Color) BitBoard {
 	var attacks BitBoard
 
 	attackers := (p.Pieces[Rook] | p.Pieces[Queen]) & p.AllPieces[us]
-	occupied := p.Occupied &^ (p.Pieces[King] & p.AllPieces[them])
+	occupied := p.Occupied() &^ (p.Pieces[King] & p.AllPieces[them])
 
 	var sq Square
 
@@ -196,7 +196,7 @@ func genPawnForwardMoves(moves []Move, p *Position, cpm *checkersPinsAndMask) []
 
 	var from, to Square
 
-	singlePush := pawns.RotateLeft(singlePushes) &^ p.Occupied
+	singlePush := pawns.RotateLeft(singlePushes) &^ p.Occupied()
 	sp := Square(singlePushes)
 	for pushes := singlePush & cpm.moveMask; pushes != 0; {
 		to, pushes = pushes.PopLSB()
@@ -214,7 +214,7 @@ func genPawnForwardMoves(moves []Move, p *Position, cpm *checkersPinsAndMask) []
 		}
 	}
 
-	doublePushes := (singlePush & startPlusOneRank).RotateLeft(singlePushes) &^ p.Occupied & cpm.moveMask
+	doublePushes := (singlePush & startPlusOneRank).RotateLeft(singlePushes) &^ p.Occupied() & cpm.moveMask
 	dp := Square(2 * singlePushes)
 	for doublePushes != 0 {
 		to, doublePushes = doublePushes.PopLSB()
@@ -298,7 +298,7 @@ func genPawnEnPassantMoves(moves []Move, p *Position, cpm *checkersPinsAndMask) 
 
 	left := pawnsOnRank & (File_Not_A & p.EnPassantTarget >> 1)
 	if left != 0 {
-		occupiedWithoutPawns := p.Occupied &^ (left | p.EnPassantTarget)
+		occupiedWithoutPawns := p.Occupied() &^ (left | p.EnPassantTarget)
 		path := genRookAttacks(kingSq, occupiedWithoutPawns) & enPassantRanks
 
 		if enemyQueenOrRooks&path == 0 {
@@ -310,7 +310,7 @@ func genPawnEnPassantMoves(moves []Move, p *Position, cpm *checkersPinsAndMask) 
 
 	right := pawnsOnRank & (File_Not_H & p.EnPassantTarget << 1)
 	if right != 0 {
-		occupiedWithoutPawns := p.Occupied &^ (right | p.EnPassantTarget)
+		occupiedWithoutPawns := p.Occupied() &^ (right | p.EnPassantTarget)
 		path := genRookAttacks(kingSq, occupiedWithoutPawns) & enPassantRanks
 
 		if enemyQueenOrRooks&path == 0 {
@@ -346,7 +346,7 @@ func genBishopMoves(moves []Move, p *Position, cpm *checkersPinsAndMask) []Move 
 	var from, to Square
 	for b := bishops & cpm.diagonalPins; b != 0; {
 		from, b = b.PopLSB()
-		targets := genBishopAttacks(from, p.Occupied) & cpm.moveMask & cpm.diagonalPins
+		targets := genBishopAttacks(from, p.Occupied()) & cpm.moveMask & cpm.diagonalPins
 
 		for targets != 0 {
 			to, targets = targets.PopLSB()
@@ -356,7 +356,7 @@ func genBishopMoves(moves []Move, p *Position, cpm *checkersPinsAndMask) []Move 
 
 	for b := bishops &^ cpm.diagonalPins; b != 0; {
 		from, b = b.PopLSB()
-		targets := genBishopAttacks(from, p.Occupied) & cpm.moveMask
+		targets := genBishopAttacks(from, p.Occupied()) & cpm.moveMask
 
 		for targets != 0 {
 			to, targets = targets.PopLSB()
@@ -373,7 +373,7 @@ func genRookMoves(moves []Move, p *Position, cpm *checkersPinsAndMask) []Move {
 	var from, to Square
 	for r := rooks & cpm.straightPins; r != 0; {
 		from, r = r.PopLSB()
-		targets := genRookAttacks(from, p.Occupied) & cpm.moveMask & cpm.straightPins
+		targets := genRookAttacks(from, p.Occupied()) & cpm.moveMask & cpm.straightPins
 
 		for targets != 0 {
 			to, targets = targets.PopLSB()
@@ -383,7 +383,7 @@ func genRookMoves(moves []Move, p *Position, cpm *checkersPinsAndMask) []Move {
 
 	for r := rooks &^ cpm.straightPins; r != 0; {
 		from, r = r.PopLSB()
-		targets := genRookAttacks(from, p.Occupied) & cpm.moveMask
+		targets := genRookAttacks(from, p.Occupied()) & cpm.moveMask
 
 		for targets != 0 {
 			to, targets = targets.PopLSB()
@@ -397,7 +397,7 @@ func genRookMoves(moves []Move, p *Position, cpm *checkersPinsAndMask) []Move {
 func genQueenMoves(moves []Move, p *Position, cpm *checkersPinsAndMask) []Move {
 	queens := (p.AllPieces[p.Active()] & p.Pieces[Queen])
 	//enemiesOrEmpty := ^p.AllPieces[us] & cpm.moveMask
-	occupied := p.Occupied
+	occupied := p.Occupied()
 
 	var from, to Square
 	for q := queens & cpm.diagonalPins; q != 0; {
@@ -458,28 +458,28 @@ func genKingMoves(moves []Move, p *Position) []Move {
 	// castling
 	if us == White &&
 		p.CanWhiteCastleKingSide() &&
-		WhiteKingSideCastleFree&p.Occupied == 0 &&
+		WhiteKingSideCastleFree&p.Occupied() == 0 &&
 		WhiteKingSideCastleNotAttacked&attacked == 0 {
 		moves = append(moves, NewCastleKingSideMove(SQ_E1, SQ_G1))
 	}
 
 	if us == White &&
 		p.CanWhiteCastleQueenSide() &&
-		WhiteQueenSideCastleFree&p.Occupied == 0 &&
+		WhiteQueenSideCastleFree&p.Occupied() == 0 &&
 		WhiteQueenSideCastleNotAttacked&attacked == 0 {
 		moves = append(moves, NewCastleQueenSideMove(SQ_E1, SQ_C1))
 	}
 
 	if us == Black &&
 		p.CanBlackCastleKingSide() &&
-		BlackKingSideCastleFree&p.Occupied == 0 &&
+		BlackKingSideCastleFree&p.Occupied() == 0 &&
 		BlackKingSideCastleNotAttacked&attacked == 0 {
 		moves = append(moves, NewCastleKingSideMove(SQ_E8, SQ_G8))
 	}
 
 	if us == Black &&
 		p.CanBlackCastleQueenSide() &&
-		BlackQueenSideCastleFree&p.Occupied == 0 &&
+		BlackQueenSideCastleFree&p.Occupied() == 0 &&
 		BlackQueenSideCastleNotAttacked&attacked == 0 {
 		moves = append(moves, NewCastleQueenSideMove(SQ_E8, SQ_C8))
 	}

@@ -37,11 +37,7 @@ const (
 type Position struct {
 	Pieces [Piece(6)]BitBoard
 
-	//Pieces    [Color(2)][Piece(6)]BitBoard
 	AllPieces [Color(2)]BitBoard
-
-	//FIXME: remove this and use p.AllPieces
-	Occupied BitBoard
 
 	EnPassantTarget BitBoard
 
@@ -67,51 +63,39 @@ func Parse(fen string) (Position, error) {
 			case 'P':
 				pos.Pieces[Pawn] |= bit
 				pos.AllPieces[White] |= bit
-				pos.Occupied |= bit
 			case 'N':
 				pos.Pieces[Knight] |= bit
 				pos.AllPieces[White] |= bit
-				pos.Occupied |= bit
 			case 'B':
 				pos.Pieces[Bishop] |= bit
 				pos.AllPieces[White] |= bit
-				pos.Occupied |= bit
 			case 'R':
 				pos.Pieces[Rook] |= bit
 				pos.AllPieces[White] |= bit
-				pos.Occupied |= bit
 			case 'Q':
 				pos.Pieces[Queen] |= bit
 				pos.AllPieces[White] |= bit
-				pos.Occupied |= bit
 			case 'K':
 				pos.Pieces[King] |= bit
 				pos.AllPieces[White] |= bit
-				pos.Occupied |= bit
 			case 'p':
 				pos.Pieces[Pawn] |= bit
 				pos.AllPieces[Black] |= bit
-				pos.Occupied |= bit
 			case 'n':
 				pos.Pieces[Knight] |= bit
 				pos.AllPieces[Black] |= bit
-				pos.Occupied |= bit
 			case 'b':
 				pos.Pieces[Bishop] |= bit
 				pos.AllPieces[Black] |= bit
-				pos.Occupied |= bit
 			case 'r':
 				pos.Pieces[Rook] |= bit
 				pos.AllPieces[Black] |= bit
-				pos.Occupied |= bit
 			case 'q':
 				pos.Pieces[Queen] |= bit
 				pos.AllPieces[Black] |= bit
-				pos.Occupied |= bit
 			case 'k':
 				pos.Pieces[King] |= bit
 				pos.AllPieces[Black] |= bit
-				pos.Occupied |= bit
 			case '1', '2', '3', '4', '5', '6', '7', '8':
 				bit <<= uint(char - '1')
 			default:
@@ -204,7 +188,7 @@ func (p Position) Fen() string {
 			empty := 1
 			bit <<= 1
 			for ; bit != 0; bit, empty = bit<<1, empty+1 {
-				if p.Occupied&bit != 0 || bit&File_A != 0 {
+				if (p.AllPieces[White]|p.AllPieces[Black])&bit != 0 || bit&File_A != 0 {
 					bit >>= 1
 					break
 				}
@@ -347,11 +331,15 @@ func (p *Position) CanBlackCastleQueenSide() bool {
 	return p.CastlingRights&BlackQueenSideCastle != 0
 }
 
+func (p *Position) Occupied() BitBoard {
+	return p.AllPieces[White] | p.AllPieces[Black]
+}
+
 func Do(p *Position, m Move) {
 
 	from := BitBoard(1) << m.From()
 	to := BitBoard(1) << m.To()
-	isCapture := p.Occupied&to != 0
+	isCapture := p.Occupied()&to != 0
 	piece := m.Piece()
 	enPassantTarget := p.EnPassantTarget
 	p.EnPassantTarget = 0
@@ -413,25 +401,21 @@ func (p *Position) updateCastlingRights(fromTo BitBoard) {
 
 func (p *Position) move(piece Piece, color Color, from, to BitBoard) {
 	fromAndTo := from | to
-	p.Occupied ^= fromAndTo
 	p.AllPieces[color] ^= fromAndTo
 	p.Pieces[piece] ^= fromAndTo
 }
 
 func (p *Position) put(piece Piece, color Color, sq BitBoard) {
-	p.Occupied |= sq
 	p.AllPieces[color] |= sq
 	p.Pieces[piece] |= sq
 }
 
 func (p *Position) remove(piece Piece, color Color, sq BitBoard) {
-	p.Occupied &^= sq
 	p.AllPieces[color] &^= sq
 	p.Pieces[piece] &^= sq
 }
 
 func (p *Position) removeAll(color Color, sq BitBoard) {
-	p.Occupied &^= sq
 	p.AllPieces[color] &^= sq
 	p.Pieces[Pawn] &^= sq
 	p.Pieces[Knight] &^= sq
