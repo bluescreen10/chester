@@ -7,5 +7,6 @@ const (
 )
 
 func main() {
+	//fmt.Println(unsafe.Sizeof(Position{}))
 	startUCI()
 }

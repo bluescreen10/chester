@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"testing"
 
-	pawned "github.com/bluescreen10/pawned"
+	chester "github.com/bluescreen10/chester"
 )
 
 func TestPopLSB(t *testing.T) {
 	tests := []struct {
-		in, out pawned.BitBoard
-		sq      pawned.Square
+		in, out chester.BitBoard
+		sq      chester.Square
 	}{
 		{0x01, 0x00, 0},
 		{0x02, 0x00, 1},
@@ -25,7 +25,7 @@ func TestPopLSB(t *testing.T) {
 
 	for i, test := range tests {
 		t.Run(fmt.Sprintf("PopLSB(%d)", i), func(t *testing.T) {
-			b := pawned.BitBoard(test.in)
+			b := chester.BitBoard(test.in)
 			sq, out := b.PopLSB()
 			if sq != test.sq || out != test.out {
 				t.Fatalf("PopLSB(%d) got sq(%d) bb(%b), want sq(%d) bb(%b)", i, sq, out, test.sq, test.out)

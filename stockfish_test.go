@@ -16,46 +16,46 @@ import (
 
 	"math/rand"
 
-	pawned "github.com/bluescreen10/pawned"
+	chester "github.com/bluescreen10/chester"
 )
 
 func TestCompareToStockfish(t *testing.T) {
 	maxDepth := 7
 	for depth := 1; depth <= maxDepth; depth++ {
-		comparePawnedAndStockfish(t, depth, "")
+		comparechesterAndStockfish(t, depth, "")
 	}
 }
 
-func comparePawnedAndStockfish(t *testing.T, depth int, moves string) {
+func comparechesterAndStockfish(t *testing.T, depth int, moves string) {
 	// Run Stockfish
 	sfMoves, fen := sfPerft(depth, moves)
 
 	// Run our engine
-	p, err := pawned.Parse(fen)
+	p, err := chester.Parse(fen)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	ch := pawned.Perft(&p, depth)
-	pawnedMoves := make(map[string]int)
+	ch := chester.Perft(&p, depth)
+	chesterMoves := make(map[string]int)
 	for mc := range ch {
-		pawnedMoves[mc.Move.String()] = mc.Count
+		chesterMoves[mc.Move.String()] = mc.Count
 	}
 
 	// Compare the results
-	diff := compareMaps(pawnedMoves, sfMoves)
+	diff := compareMaps(chesterMoves, sfMoves)
 
 	if len(diff) > 0 {
 		move := pickRandomMove(diff)
 		if depth < 2 {
 			t.Fatalf(
-				"move: %s, stockfish: %d, pawned: %d\n"+
+				"move: %s, stockfish: %d, chester: %d\n"+
 					"moves: %s\n"+
 					"fen: %s\n"+
 					"%s\n",
-				move, len(sfMoves), len(pawnedMoves), movesToString(sfMoves), fen, p)
+				move, len(sfMoves), len(chesterMoves), movesToString(sfMoves), fen, p)
 		} else {
-			comparePawnedAndStockfish(t, depth-1, moves+" "+move)
+			comparechesterAndStockfish(t, depth-1, moves+" "+move)
 		}
 	}
 }

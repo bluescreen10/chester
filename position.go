@@ -35,9 +35,13 @@ const (
 )
 
 type Position struct {
-	Pieces    [Color(2)][Piece(6)]BitBoard
+	Pieces [Piece(6)]BitBoard
+
+	//Pieces    [Color(2)][Piece(6)]BitBoard
 	AllPieces [Color(2)]BitBoard
-	Occupied  BitBoard
+
+	//FIXME: remove this and use p.AllPieces
+	Occupied BitBoard
 
 	EnPassantTarget BitBoard
 
@@ -61,51 +65,51 @@ func Parse(fen string) (Position, error) {
 		for _, char := range row {
 			switch char {
 			case 'P':
-				pos.Pieces[White][Pawn] |= bit
+				pos.Pieces[Pawn] |= bit
 				pos.AllPieces[White] |= bit
 				pos.Occupied |= bit
 			case 'N':
-				pos.Pieces[White][Knight] |= bit
+				pos.Pieces[Knight] |= bit
 				pos.AllPieces[White] |= bit
 				pos.Occupied |= bit
 			case 'B':
-				pos.Pieces[White][Bishop] |= bit
+				pos.Pieces[Bishop] |= bit
 				pos.AllPieces[White] |= bit
 				pos.Occupied |= bit
 			case 'R':
-				pos.Pieces[White][Rook] |= bit
+				pos.Pieces[Rook] |= bit
 				pos.AllPieces[White] |= bit
 				pos.Occupied |= bit
 			case 'Q':
-				pos.Pieces[White][Queen] |= bit
+				pos.Pieces[Queen] |= bit
 				pos.AllPieces[White] |= bit
 				pos.Occupied |= bit
 			case 'K':
-				pos.Pieces[White][King] |= bit
+				pos.Pieces[King] |= bit
 				pos.AllPieces[White] |= bit
 				pos.Occupied |= bit
 			case 'p':
-				pos.Pieces[Black][Pawn] |= bit
+				pos.Pieces[Pawn] |= bit
 				pos.AllPieces[Black] |= bit
 				pos.Occupied |= bit
 			case 'n':
-				pos.Pieces[Black][Knight] |= bit
+				pos.Pieces[Knight] |= bit
 				pos.AllPieces[Black] |= bit
 				pos.Occupied |= bit
 			case 'b':
-				pos.Pieces[Black][Bishop] |= bit
+				pos.Pieces[Bishop] |= bit
 				pos.AllPieces[Black] |= bit
 				pos.Occupied |= bit
 			case 'r':
-				pos.Pieces[Black][Rook] |= bit
+				pos.Pieces[Rook] |= bit
 				pos.AllPieces[Black] |= bit
 				pos.Occupied |= bit
 			case 'q':
-				pos.Pieces[Black][Queen] |= bit
+				pos.Pieces[Queen] |= bit
 				pos.AllPieces[Black] |= bit
 				pos.Occupied |= bit
 			case 'k':
-				pos.Pieces[Black][King] |= bit
+				pos.Pieces[King] |= bit
 				pos.AllPieces[Black] |= bit
 				pos.Occupied |= bit
 			case '1', '2', '3', '4', '5', '6', '7', '8':
@@ -172,29 +176,29 @@ func (p Position) Fen() string {
 			fen.WriteByte('/')
 		}
 
-		if p.Pieces[White][Pawn]&bit != 0 {
+		if p.AllPieces[White]&p.Pieces[Pawn]&bit != 0 {
 			fen.WriteByte('P')
-		} else if p.Pieces[Black][Pawn]&bit != 0 {
+		} else if p.AllPieces[Black]&p.Pieces[Pawn]&bit != 0 {
 			fen.WriteByte('p')
-		} else if p.Pieces[White][Knight]&bit != 0 {
+		} else if p.AllPieces[White]&p.Pieces[Knight]&bit != 0 {
 			fen.WriteByte('N')
-		} else if p.Pieces[Black][Knight]&bit != 0 {
+		} else if p.AllPieces[Black]&p.Pieces[Knight]&bit != 0 {
 			fen.WriteByte('n')
-		} else if p.Pieces[White][Bishop]&bit != 0 {
+		} else if p.AllPieces[White]&p.Pieces[Bishop]&bit != 0 {
 			fen.WriteByte('B')
-		} else if p.Pieces[Black][Bishop]&bit != 0 {
+		} else if p.AllPieces[Black]&p.Pieces[Bishop]&bit != 0 {
 			fen.WriteByte('b')
-		} else if p.Pieces[White][Rook]&bit != 0 {
+		} else if p.AllPieces[White]&p.Pieces[Rook]&bit != 0 {
 			fen.WriteByte('R')
-		} else if p.Pieces[Black][Rook]&bit != 0 {
+		} else if p.AllPieces[Black]&p.Pieces[Rook]&bit != 0 {
 			fen.WriteByte('r')
-		} else if p.Pieces[White][Queen]&bit != 0 {
+		} else if p.AllPieces[White]&p.Pieces[Queen]&bit != 0 {
 			fen.WriteByte('Q')
-		} else if p.Pieces[Black][Queen]&bit != 0 {
+		} else if p.AllPieces[Black]&p.Pieces[Queen]&bit != 0 {
 			fen.WriteByte('q')
-		} else if p.Pieces[White][King]&bit != 0 {
+		} else if p.AllPieces[White]&p.Pieces[King]&bit != 0 {
 			fen.WriteByte('K')
-		} else if p.Pieces[Black][King]&bit != 0 {
+		} else if p.AllPieces[Black]&p.Pieces[King]&bit != 0 {
 			fen.WriteByte('k')
 		} else {
 			empty := 1
@@ -259,29 +263,29 @@ func (p Position) String() string {
 	for rank := 7; rank >= 0; rank-- {
 		builder.WriteByte('|')
 		for file := 0; file < 8; file++ {
-			if p.Pieces[White][Pawn]&bit != 0 {
+			if p.AllPieces[White]&p.Pieces[Pawn]&bit != 0 {
 				builder.WriteString(" P |")
-			} else if p.Pieces[Black][Pawn]&bit != 0 {
+			} else if p.AllPieces[Black]&p.Pieces[Pawn]&bit != 0 {
 				builder.WriteString(" p |")
-			} else if p.Pieces[White][Knight]&bit != 0 {
+			} else if p.AllPieces[White]&p.Pieces[Knight]&bit != 0 {
 				builder.WriteString(" N |")
-			} else if p.Pieces[Black][Knight]&bit != 0 {
+			} else if p.AllPieces[Black]&p.Pieces[Knight]&bit != 0 {
 				builder.WriteString(" n |")
-			} else if p.Pieces[White][Bishop]&bit != 0 {
+			} else if p.AllPieces[White]&p.Pieces[Bishop]&bit != 0 {
 				builder.WriteString(" B |")
-			} else if p.Pieces[Black][Bishop]&bit != 0 {
+			} else if p.AllPieces[Black]&p.Pieces[Bishop]&bit != 0 {
 				builder.WriteString(" b |")
-			} else if p.Pieces[White][Rook]&bit != 0 {
+			} else if p.AllPieces[White]&p.Pieces[Rook]&bit != 0 {
 				builder.WriteString(" R |")
-			} else if p.Pieces[Black][Rook]&bit != 0 {
+			} else if p.AllPieces[Black]&p.Pieces[Rook]&bit != 0 {
 				builder.WriteString(" r |")
-			} else if p.Pieces[White][Queen]&bit != 0 {
+			} else if p.AllPieces[White]&p.Pieces[Queen]&bit != 0 {
 				builder.WriteString(" Q |")
-			} else if p.Pieces[Black][Queen]&bit != 0 {
+			} else if p.AllPieces[Black]&p.Pieces[Queen]&bit != 0 {
 				builder.WriteString(" q |")
-			} else if p.Pieces[White][King]&bit != 0 {
+			} else if p.AllPieces[White]&p.Pieces[King]&bit != 0 {
 				builder.WriteString(" K |")
-			} else if p.Pieces[Black][King]&bit != 0 {
+			} else if p.AllPieces[Black]&p.Pieces[King]&bit != 0 {
 				builder.WriteString(" k |")
 			} else {
 				builder.WriteString("   |")
@@ -411,45 +415,45 @@ func (p *Position) move(piece Piece, color Color, from, to BitBoard) {
 	fromAndTo := from | to
 	p.Occupied ^= fromAndTo
 	p.AllPieces[color] ^= fromAndTo
-	p.Pieces[color][piece] ^= fromAndTo
+	p.Pieces[piece] ^= fromAndTo
 }
 
 func (p *Position) put(piece Piece, color Color, sq BitBoard) {
 	p.Occupied |= sq
 	p.AllPieces[color] |= sq
-	p.Pieces[color][piece] |= sq
+	p.Pieces[piece] |= sq
 }
 
 func (p *Position) remove(piece Piece, color Color, sq BitBoard) {
 	p.Occupied &^= sq
 	p.AllPieces[color] &^= sq
-	p.Pieces[color][piece] &^= sq
+	p.Pieces[piece] &^= sq
 }
 
 func (p *Position) removeAll(color Color, sq BitBoard) {
 	p.Occupied &^= sq
 	p.AllPieces[color] &^= sq
-	p.Pieces[color][Pawn] &^= sq
-	p.Pieces[color][Knight] &^= sq
-	p.Pieces[color][Bishop] &^= sq
-	p.Pieces[color][Rook] &^= sq
-	p.Pieces[color][Queen] &^= sq
+	p.Pieces[Pawn] &^= sq
+	p.Pieces[Knight] &^= sq
+	p.Pieces[Bishop] &^= sq
+	p.Pieces[Rook] &^= sq
+	p.Pieces[Queen] &^= sq
 }
 
 func (p Position) Get(sq Square) Piece {
 	bit := BitBoard(1) << sq
 
-	if p.Pieces[p.active][Pawn]&bit != 0 {
+	if p.AllPieces[p.active]&p.Pieces[Pawn]&bit != 0 {
 		return Pawn
-	} else if p.Pieces[p.active][Knight]&bit != 0 {
+	} else if p.AllPieces[p.active]&p.Pieces[Knight]&bit != 0 {
 		return Knight
-	} else if p.Pieces[p.active][Bishop]&bit != 0 {
+	} else if p.AllPieces[p.active]&p.Pieces[Bishop]&bit != 0 {
 		return Bishop
-	} else if p.Pieces[p.active][Rook]&bit != 0 {
+	} else if p.AllPieces[p.active]&p.Pieces[Rook]&bit != 0 {
 		return Rook
-	} else if p.Pieces[p.active][Queen]&bit != 0 {
+	} else if p.AllPieces[p.active]&p.Pieces[Queen]&bit != 0 {
 		return Queen
-	} else if p.Pieces[p.active][King]&bit != 0 {
+	} else if p.AllPieces[p.active]&p.Pieces[King]&bit != 0 {
 		return King
 	}
 	return Empty
