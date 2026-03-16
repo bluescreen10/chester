@@ -456,32 +456,32 @@ func genKingMoves(moves []Move, p *Position) []Move {
 	}
 
 	// castling
-	if us == White &&
-		p.CanWhiteCastleKingSide() &&
-		WhiteKingSideCastleFree&p.Occupied() == 0 &&
-		WhiteKingSideCastleNotAttacked&attacked == 0 {
-		moves = append(moves, NewCastleKingSideMove(SQ_E1, SQ_G1))
+	if us == White {
+		if p.CanWhiteCastleKingSide() &&
+			WhiteKingSideCastleFree&p.Occupied() == 0 &&
+			WhiteKingSideCastleNotAttacked&attacked == 0 {
+			moves = append(moves, NewCastleKingSideMove(SQ_E1, SQ_G1))
+		}
+
+		if p.CanWhiteCastleQueenSide() &&
+			WhiteQueenSideCastleFree&p.Occupied() == 0 &&
+			WhiteQueenSideCastleNotAttacked&attacked == 0 {
+			moves = append(moves, NewCastleQueenSideMove(SQ_E1, SQ_C1))
+		}
 	}
 
-	if us == White &&
-		p.CanWhiteCastleQueenSide() &&
-		WhiteQueenSideCastleFree&p.Occupied() == 0 &&
-		WhiteQueenSideCastleNotAttacked&attacked == 0 {
-		moves = append(moves, NewCastleQueenSideMove(SQ_E1, SQ_C1))
-	}
+	if us == Black {
+		if p.CanBlackCastleKingSide() &&
+			BlackKingSideCastleFree&p.Occupied() == 0 &&
+			BlackKingSideCastleNotAttacked&attacked == 0 {
+			moves = append(moves, NewCastleKingSideMove(SQ_E8, SQ_G8))
+		}
 
-	if us == Black &&
-		p.CanBlackCastleKingSide() &&
-		BlackKingSideCastleFree&p.Occupied() == 0 &&
-		BlackKingSideCastleNotAttacked&attacked == 0 {
-		moves = append(moves, NewCastleKingSideMove(SQ_E8, SQ_G8))
-	}
-
-	if us == Black &&
-		p.CanBlackCastleQueenSide() &&
-		BlackQueenSideCastleFree&p.Occupied() == 0 &&
-		BlackQueenSideCastleNotAttacked&attacked == 0 {
-		moves = append(moves, NewCastleQueenSideMove(SQ_E8, SQ_C8))
+		if p.CanBlackCastleQueenSide() &&
+			BlackQueenSideCastleFree&p.Occupied() == 0 &&
+			BlackQueenSideCastleNotAttacked&attacked == 0 {
+			moves = append(moves, NewCastleQueenSideMove(SQ_E8, SQ_C8))
+		}
 	}
 
 	return moves

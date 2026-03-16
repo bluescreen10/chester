@@ -291,30 +291,6 @@ func (p *Position) Inactive() Color {
 	return p.inactive
 }
 
-// func (p Position) EnPassantFile() bitboard {
-// 	_, file := p.EnPassantSquare.RankAndFile()
-// 	switch file {
-// 	case 0:
-// 		return File_A
-// 	case 1:
-// 		return File_B
-// 	case 2:
-// 		return File_C
-// 	case 3:
-// 		return File_D
-// 	case 4:
-// 		return File_E
-// 	case 5:
-// 		return File_F
-// 	case 6:
-// 		return File_G
-// 	case 7:
-// 		return File_H
-// 	default:
-// 		return bitboard(0)
-// 	}
-// }
-
 func (p *Position) CanWhiteCastleKingSide() bool {
 	return p.CastlingRights&WhiteKingSideCastle != 0
 }
@@ -378,6 +354,8 @@ func Do(p *Position, m Move) {
 
 	if !isCapture && piece != Pawn {
 		p.HalfMoves++
+	} else {
+		p.HalfMoves = 0
 	}
 
 	if p.active == Black {
