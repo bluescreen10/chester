@@ -13,11 +13,11 @@ const (
 )
 
 type checkersPinsAndMask struct {
-	checkers     BitBoard
-	diagonalPins BitBoard
-	straightPins BitBoard
-	allPins      BitBoard
-	moveMask     BitBoard
+	checkers     bitboard
+	diagonalPins bitboard
+	straightPins bitboard
+	allPins      bitboard
+	moveMask     bitboard
 }
 
 func LegalMoves(moves []Move, p *Position) ([]Move, bool) {
@@ -58,8 +58,8 @@ func checkersAndPinned(p *Position) checkersPinsAndMask {
 
 	cpm.checkers |= knightMoves[kingSq] & p.Pieces[Knight] & p.AllPieces[them]
 
-	leftAttacks := 16*int(us) - 9
-	rightAttacks := 16*int(us) - 7
+	leftAttacks := int(16*us - 9)
+	rightAttacks := int(16*us - 7)
 	pawns := p.AllPieces[them] & p.Pieces[Pawn]
 	cpm.checkers |= (king & File_Not_A).RotateLeft(leftAttacks) & pawns
 	cpm.checkers |= (king & File_Not_H).RotateLeft(rightAttacks) & pawns
@@ -105,7 +105,7 @@ func checkersAndPinned(p *Position) checkersPinsAndMask {
 	return cpm
 }
 
-func genPawnsAttacks(p *Position, us Color) BitBoard {
+func genPawnsAttacks(p *Position, us Color) bitboard {
 	pawns := p.Pieces[Pawn] & p.AllPieces[us]
 	//config := pawnConfig[us]
 	leftAttacks := 16*int(us) - 9
@@ -115,8 +115,8 @@ func genPawnsAttacks(p *Position, us Color) BitBoard {
 	return left | right
 }
 
-func genKnightsAttacks(p *Position, us Color) BitBoard {
-	var attacks BitBoard
+func genKnightsAttacks(p *Position, us Color) bitboard {
+	var attacks bitboard
 
 	knights := p.Pieces[Knight] & p.AllPieces[us]
 
@@ -130,8 +130,8 @@ func genKnightsAttacks(p *Position, us Color) BitBoard {
 	return attacks
 }
 
-func genDiagonalAttacks(p *Position, us, them Color) BitBoard {
-	var attacks BitBoard
+func genDiagonalAttacks(p *Position, us, them Color) bitboard {
+	var attacks bitboard
 
 	attacker := (p.Pieces[Bishop] | p.Pieces[Queen]) & p.AllPieces[us]
 	occupied := p.Occupied() &^ (p.Pieces[King] & p.AllPieces[them])
@@ -146,7 +146,7 @@ func genDiagonalAttacks(p *Position, us, them Color) BitBoard {
 	return attacks
 }
 
-func genBishopAttacks(sq Square, occupied BitBoard) BitBoard {
+func genBishopAttacks(sq Square, occupied bitboard) bitboard {
 
 	occupied &= BishopMagic[sq].Mask
 	occupied *= BishopMagic[sq].Magic
@@ -154,8 +154,8 @@ func genBishopAttacks(sq Square, occupied BitBoard) BitBoard {
 	return BishopMagic[sq].Attacks[occupied]
 }
 
-func genStraightAttacks(p *Position, us, them Color) BitBoard {
-	var attacks BitBoard
+func genStraightAttacks(p *Position, us, them Color) bitboard {
+	var attacks bitboard
 
 	attackers := (p.Pieces[Rook] | p.Pieces[Queen]) & p.AllPieces[us]
 	occupied := p.Occupied() &^ (p.Pieces[King] & p.AllPieces[them])
@@ -170,7 +170,7 @@ func genStraightAttacks(p *Position, us, them Color) BitBoard {
 	return attacks
 }
 
-func genRookAttacks(sq Square, occupied BitBoard) BitBoard {
+func genRookAttacks(sq Square, occupied bitboard) bitboard {
 	//m := RookMagic[sq]
 	occupied &= RookMagic[sq].Mask
 	occupied *= RookMagic[sq].Magic
@@ -178,7 +178,7 @@ func genRookAttacks(sq Square, occupied BitBoard) BitBoard {
 	return RookMagic[sq].Attacks[occupied]
 }
 
-func genKingAttacks(p *Position, us Color) BitBoard {
+func genKingAttacks(p *Position, us Color) bitboard {
 	king := p.Pieces[King] & p.AllPieces[us]
 	sq, _ := king.PopLSB()
 	return kingMoves[sq]
@@ -187,7 +187,7 @@ func genKingAttacks(p *Position, us Color) BitBoard {
 func genPawnForwardMoves(moves []Move, p *Position, cpm *checkersPinsAndMask) []Move {
 	us := p.Active()
 	singlePushes := -8 + 16*int(us)
-	startPlusOneRank := (Rank_3 * (1 - BitBoard(us))) | (Rank_6 * BitBoard(us))
+	startPlusOneRank := (Rank_3 * (1 - bitboard(us))) | (Rank_6 * bitboard(us))
 
 	pawns := (p.Pieces[Pawn] & p.AllPieces[us]) &^ cpm.diagonalPins
 	pinnedPawns := pawns & cpm.straightPins.RotateLeft(-singlePushes)
@@ -487,7 +487,7 @@ func genKingMoves(moves []Move, p *Position) []Move {
 	return moves
 }
 
-func attacks(p *Position, us, them Color) BitBoard {
+func attacks(p *Position, us, them Color) bitboard {
 	return genPawnsAttacks(p, us) |
 		genKnightsAttacks(p, us) |
 		genDiagonalAttacks(p, us, them) |

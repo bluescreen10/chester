@@ -35,11 +35,11 @@ const (
 )
 
 type Position struct {
-	Pieces [Piece(6)]BitBoard
+	Pieces [Piece(6)]bitboard
 
-	AllPieces [Color(2)]BitBoard
+	AllPieces [Color(2)]bitboard
 
-	EnPassantTarget BitBoard
+	EnPassantTarget bitboard
 
 	FullMoves        uint16
 	HalfMoves        uint8
@@ -55,7 +55,7 @@ func Parse(fen string) (Position, error) {
 		return pos, fmt.Errorf("invalid fen: %s", fen)
 	}
 
-	bit := BitBoard(1)
+	bit := bitboard(1)
 
 	for _, row := range strings.Split(parts[0], "/") {
 		for _, char := range row {
@@ -131,9 +131,9 @@ func Parse(fen string) (Position, error) {
 
 	if sq := SquareFromString(parts[3]); sq != SQ_NULL {
 		if pos.Active() == White {
-			pos.EnPassantTarget = NewBitBoardFromSquare(sq + 8)
+			pos.EnPassantTarget = NewbitboardFromSquare(sq + 8)
 		} else {
-			pos.EnPassantTarget = NewBitBoardFromSquare(sq - 8)
+			pos.EnPassantTarget = NewbitboardFromSquare(sq - 8)
 		}
 	}
 
@@ -155,7 +155,7 @@ func Parse(fen string) (Position, error) {
 func (p Position) Fen() string {
 	fen := strings.Builder{}
 
-	for bit := BitBoard(1); bit != 0; bit <<= 1 {
+	for bit := bitboard(1); bit != 0; bit <<= 1 {
 		if bit&File_A != 0 && bit > 1 {
 			fen.WriteByte('/')
 		}
@@ -243,7 +243,7 @@ func (p Position) String() string {
 	builder := strings.Builder{}
 
 	builder.WriteString("+---+---+---+---+---+---+---+---+\n")
-	bit := BitBoard(1)
+	bit := bitboard(1)
 	for rank := 7; rank >= 0; rank-- {
 		builder.WriteByte('|')
 		for file := 0; file < 8; file++ {
@@ -291,7 +291,7 @@ func (p *Position) Inactive() Color {
 	return p.inactive
 }
 
-// func (p Position) EnPassantFile() BitBoard {
+// func (p Position) EnPassantFile() bitboard {
 // 	_, file := p.EnPassantSquare.RankAndFile()
 // 	switch file {
 // 	case 0:
@@ -311,7 +311,7 @@ func (p *Position) Inactive() Color {
 // 	case 7:
 // 		return File_H
 // 	default:
-// 		return BitBoard(0)
+// 		return bitboard(0)
 // 	}
 // }
 
@@ -331,14 +331,14 @@ func (p *Position) CanBlackCastleQueenSide() bool {
 	return p.CastlingRights&BlackQueenSideCastle != 0
 }
 
-func (p *Position) Occupied() BitBoard {
+func (p *Position) Occupied() bitboard {
 	return p.AllPieces[White] | p.AllPieces[Black]
 }
 
 func Do(p *Position, m Move) {
 
-	from := BitBoard(1) << m.From()
-	to := BitBoard(1) << m.To()
+	from := bitboard(1) << m.From()
+	to := bitboard(1) << m.To()
 	isCapture := p.Occupied()&to != 0
 	piece := m.Piece()
 	enPassantTarget := p.EnPassantTarget
@@ -387,7 +387,7 @@ func Do(p *Position, m Move) {
 	p.active, p.inactive = p.inactive, p.active
 }
 
-func (p *Position) updateCastlingRights(fromTo BitBoard) {
+func (p *Position) updateCastlingRights(fromTo bitboard) {
 	p.CastlingRights &^= WhiteKingSideCastle * CastlingRights((fromTo&BB_SQ_H1)>>SQ_H1)
 	p.CastlingRights &^= (WhiteKingSideCastle | WhiteQueenSideCastle) * CastlingRights((fromTo&BB_SQ_E1)>>SQ_E1)
 	p.CastlingRights &^= WhiteQueenSideCastle * CastlingRights((fromTo&BB_SQ_A1)>>SQ_A1)
@@ -399,23 +399,23 @@ func (p *Position) updateCastlingRights(fromTo BitBoard) {
 
 //func (p *Position) Undo () {}
 
-func (p *Position) move(piece Piece, color Color, from, to BitBoard) {
+func (p *Position) move(piece Piece, color Color, from, to bitboard) {
 	fromAndTo := from | to
 	p.AllPieces[color] ^= fromAndTo
 	p.Pieces[piece] ^= fromAndTo
 }
 
-func (p *Position) put(piece Piece, color Color, sq BitBoard) {
+func (p *Position) put(piece Piece, color Color, sq bitboard) {
 	p.AllPieces[color] |= sq
 	p.Pieces[piece] |= sq
 }
 
-func (p *Position) remove(piece Piece, color Color, sq BitBoard) {
+func (p *Position) remove(piece Piece, color Color, sq bitboard) {
 	p.AllPieces[color] &^= sq
 	p.Pieces[piece] &^= sq
 }
 
-func (p *Position) removeAll(color Color, sq BitBoard) {
+func (p *Position) removeAll(color Color, sq bitboard) {
 	p.AllPieces[color] &^= sq
 	p.Pieces[Pawn] &^= sq
 	p.Pieces[Knight] &^= sq
@@ -425,7 +425,7 @@ func (p *Position) removeAll(color Color, sq BitBoard) {
 }
 
 func (p Position) Get(sq Square) Piece {
-	bit := BitBoard(1) << sq
+	bit := bitboard(1) << sq
 
 	if p.AllPieces[p.active]&p.Pieces[Pawn]&bit != 0 {
 		return Pawn
