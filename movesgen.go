@@ -13,11 +13,11 @@ const (
 )
 
 type checkersPinsAndMask struct {
-	checkers     bitboard
-	diagonalPins bitboard
-	straightPins bitboard
-	allPins      bitboard
-	moveMask     bitboard
+	checkers     Bitboard
+	diagonalPins Bitboard
+	straightPins Bitboard
+	allPins      Bitboard
+	moveMask     Bitboard
 }
 
 func LegalMoves(moves []Move, p *Position) ([]Move, bool) {
@@ -104,7 +104,7 @@ func checkersAndPinned(p *Position) checkersPinsAndMask {
 	return cpm
 }
 
-func genPawnsAttacks(p *Position) bitboard {
+func genPawnsAttacks(p *Position) Bitboard {
 	pawns := p.EnemyPawns()
 	//config := pawnConfig[us]
 	color := p.Inactive()
@@ -115,8 +115,8 @@ func genPawnsAttacks(p *Position) bitboard {
 	return left | right
 }
 
-func genKnightsAttacks(p *Position) bitboard {
-	var attacks bitboard
+func genKnightsAttacks(p *Position) Bitboard {
+	var attacks Bitboard
 
 	knights := p.EnemyKnights()
 
@@ -130,8 +130,8 @@ func genKnightsAttacks(p *Position) bitboard {
 	return attacks
 }
 
-func genDiagonalAttacks(p *Position) bitboard {
-	var attacks bitboard
+func genDiagonalAttacks(p *Position) Bitboard {
+	var attacks Bitboard
 
 	attacker := p.EnemyQueensOrBishops()
 	occupied := p.Occupied() &^ p.King()
@@ -146,7 +146,7 @@ func genDiagonalAttacks(p *Position) bitboard {
 	return attacks
 }
 
-func genBishopAttacks(sq Square, occupied bitboard) bitboard {
+func genBishopAttacks(sq Square, occupied Bitboard) Bitboard {
 
 	occupied &= BishopMagic[sq].Mask
 	occupied *= BishopMagic[sq].Magic
@@ -154,8 +154,8 @@ func genBishopAttacks(sq Square, occupied bitboard) bitboard {
 	return BishopMagic[sq].Attacks[occupied]
 }
 
-func genStraightAttacks(p *Position) bitboard {
-	var attacks bitboard
+func genStraightAttacks(p *Position) Bitboard {
+	var attacks Bitboard
 
 	attackers := p.EnemyQueensOrRooks()
 	occupied := p.Occupied() &^ p.King()
@@ -170,7 +170,7 @@ func genStraightAttacks(p *Position) bitboard {
 	return attacks
 }
 
-func genRookAttacks(sq Square, occupied bitboard) bitboard {
+func genRookAttacks(sq Square, occupied Bitboard) Bitboard {
 	//m := RookMagic[sq]
 	occupied &= RookMagic[sq].Mask
 	occupied *= RookMagic[sq].Magic
@@ -178,7 +178,7 @@ func genRookAttacks(sq Square, occupied bitboard) bitboard {
 	return RookMagic[sq].Attacks[occupied]
 }
 
-func genKingAttacks(p *Position) bitboard {
+func genKingAttacks(p *Position) Bitboard {
 	king := p.EnemyKing()
 	sq, _ := king.PopLSB()
 	return kingMoves[sq]
@@ -187,7 +187,7 @@ func genKingAttacks(p *Position) bitboard {
 func genPawnForwardMoves(moves []Move, p *Position, cpm *checkersPinsAndMask) []Move {
 	us := p.Active()
 	singlePushes := -8 + 16*int(us)
-	startPlusOneRank := (Rank_3 * (1 - bitboard(us))) | (Rank_6 * bitboard(us))
+	startPlusOneRank := (Rank_3 * (1 - Bitboard(us))) | (Rank_6 * Bitboard(us))
 
 	pawns := p.Pawns() &^ cpm.diagonalPins
 	pinnedPawns := pawns & cpm.straightPins.RotateLeft(-singlePushes)
@@ -483,7 +483,7 @@ func genKingMoves(moves []Move, p *Position) []Move {
 	return moves
 }
 
-func attacks(p *Position) bitboard {
+func attacks(p *Position) Bitboard {
 	return genPawnsAttacks(p) |
 		genKnightsAttacks(p) |
 		genDiagonalAttacks(p) |

@@ -82,7 +82,7 @@ func generateRays(w io.Writer) {
 	// rays
 	r := calculateRays()
 
-	fmt.Fprintf(w, "var rays [direction(8)][Square(64)]bitboard = [direction(8)][Square(64)]bitboard{\n")
+	fmt.Fprintf(w, "var rays [direction(8)][Square(64)]Bitboard = [direction(8)][Square(64)]Bitboard{\n")
 	for i := range 8 {
 		fmt.Fprintf(w, "\t{\n")
 		for j := range 64 {
@@ -140,7 +140,7 @@ func calculateRays() [8][64]uint64 {
 func generateKnightMoves(w io.Writer) {
 	knightMoves := calculateKnightMoves()
 
-	fmt.Fprintf(w, "var knightMoves [Square(64)]bitboard = [Square(64)]bitboard{\n")
+	fmt.Fprintf(w, "var knightMoves [Square(64)]Bitboard = [Square(64)]Bitboard{\n")
 	for i := range 64 {
 		fmt.Fprintf(w, "\t%d,\n", knightMoves[i])
 	}
@@ -169,7 +169,7 @@ func calculateKnightMoves() [64]uint64 {
 func generateKingMoves(w io.Writer) {
 	kingMoves := calculateKingMoves()
 
-	fmt.Fprintf(w, "var kingMoves [Square(64)]bitboard = [Square(64)]bitboard{\n")
+	fmt.Fprintf(w, "var kingMoves [Square(64)]Bitboard = [Square(64)]Bitboard{\n")
 	for i := range 64 {
 		fmt.Fprintf(w, "\t%d,\n", kingMoves[i])
 	}
@@ -199,7 +199,7 @@ func calculateKingMoves() [64]uint64 {
 // func generateSquaresBetween(w io.Writer) {
 // 	SquaresBetween := calculateSquaresBetween()
 
-// 	fmt.Fprintf(w, "var SquaresBetween [Square(64)][Square(64)]bitboard = [Square(64)][Square(64)]bitboard{\n")
+// 	fmt.Fprintf(w, "var SquaresBetween [Square(64)][Square(64)]Bitboard = [Square(64)][Square(64)]Bitboard{\n")
 // 	for i := range 64 {
 // 		fmt.Fprintf(w, "\t{\n")
 // 		for j := range 64 {
@@ -244,7 +244,7 @@ func calculateKingMoves() [64]uint64 {
 
 func generateLineFromTo(w io.Writer) {
 	linesFromTo := calculateLineFromTo()
-	fmt.Fprintf(w, "var lineFromTo [Square(64)][Square(64)]bitboard = [Square(64)][Square(64)]bitboard{\n")
+	fmt.Fprintf(w, "var lineFromTo [Square(64)][Square(64)]Bitboard = [Square(64)][Square(64)]Bitboard{\n")
 	for i := range 64 {
 		fmt.Fprintf(w, "\t{\n")
 		for j := range 64 {
@@ -315,34 +315,34 @@ func calculateLineFromTo() [64][64]uint64 {
 
 func generateFileRankMasks(w io.Writer) {
 	fmt.Fprintf(w, "const (\n")
-	fmt.Fprintf(w, "\tFile_A bitboard = 0x0101010101010101\n")
-	fmt.Fprintf(w, "\tFile_B bitboard = 0x0202020202020202\n")
-	fmt.Fprintf(w, "\tFile_C bitboard = 0x0404040404040404\n")
-	fmt.Fprintf(w, "\tFile_D bitboard = 0x0808080808080808\n")
-	fmt.Fprintf(w, "\tFile_E bitboard = 0x1010101010101010\n")
-	fmt.Fprintf(w, "\tFile_F bitboard = 0x2020202020202020\n")
-	fmt.Fprintf(w, "\tFile_G bitboard = 0x4040404040404040\n")
-	fmt.Fprintf(w, "\tFile_H bitboard = 0x8080808080808080\n\n")
+	fmt.Fprintf(w, "\tFile_A Bitboard = 0x0101010101010101\n")
+	fmt.Fprintf(w, "\tFile_B Bitboard = 0x0202020202020202\n")
+	fmt.Fprintf(w, "\tFile_C Bitboard = 0x0404040404040404\n")
+	fmt.Fprintf(w, "\tFile_D Bitboard = 0x0808080808080808\n")
+	fmt.Fprintf(w, "\tFile_E Bitboard = 0x1010101010101010\n")
+	fmt.Fprintf(w, "\tFile_F Bitboard = 0x2020202020202020\n")
+	fmt.Fprintf(w, "\tFile_G Bitboard = 0x4040404040404040\n")
+	fmt.Fprintf(w, "\tFile_H Bitboard = 0x8080808080808080\n\n")
 
-	fmt.Fprintf(w, "\tRank_1 bitboard = 0xFF00000000000000\n")
-	fmt.Fprintf(w, "\tRank_2 bitboard = 0x00FF000000000000\n")
-	fmt.Fprintf(w, "\tRank_3 bitboard = 0x0000FF0000000000\n")
-	fmt.Fprintf(w, "\tRank_4 bitboard = 0x000000FF00000000\n")
-	fmt.Fprintf(w, "\tRank_5 bitboard = 0x00000000FF000000\n")
-	fmt.Fprintf(w, "\tRank_6 bitboard = 0x0000000000FF0000\n")
-	fmt.Fprintf(w, "\tRank_7 bitboard = 0x000000000000FF00\n")
-	fmt.Fprintf(w, "\tRank_8 bitboard = 0x00000000000000FF\n\n")
+	fmt.Fprintf(w, "\tRank_1 Bitboard = 0xFF00000000000000\n")
+	fmt.Fprintf(w, "\tRank_2 Bitboard = 0x00FF000000000000\n")
+	fmt.Fprintf(w, "\tRank_3 Bitboard = 0x0000FF0000000000\n")
+	fmt.Fprintf(w, "\tRank_4 Bitboard = 0x000000FF00000000\n")
+	fmt.Fprintf(w, "\tRank_5 Bitboard = 0x00000000FF000000\n")
+	fmt.Fprintf(w, "\tRank_6 Bitboard = 0x0000000000FF0000\n")
+	fmt.Fprintf(w, "\tRank_7 Bitboard = 0x000000000000FF00\n")
+	fmt.Fprintf(w, "\tRank_8 Bitboard = 0x00000000000000FF\n\n")
 
-	fmt.Fprintf(w, "\tFile_Not_A bitboard = ^File_A\n")
-	fmt.Fprintf(w, "\tFile_Not_H bitboard = ^File_H\n\n")
+	fmt.Fprintf(w, "\tFile_Not_A Bitboard = ^File_A\n")
+	fmt.Fprintf(w, "\tFile_Not_H Bitboard = ^File_H\n\n")
 
-	fmt.Fprintf(w, "\tEmptyBoard bitboard = 0\n")
-	fmt.Fprintf(w, "\tFullBoard  bitboard = 0xFFFFFFFFFFFFFFFF\n")
+	fmt.Fprintf(w, "\tEmptyBoard Bitboard = 0\n")
+	fmt.Fprintf(w, "\tFullBoard  Bitboard = 0xFFFFFFFFFFFFFFFF\n")
 	fmt.Fprintf(w, ")\n")
 }
 
 // func genEnPassantNeighbours(w io.Writer) {
-// 	fmt.Fprintf(w, "var enPassantNeighbours [Square(64)]bitboard = [Square(64)]bitboard{\n")
+// 	fmt.Fprintf(w, "var enPassantNeighbours [Square(64)]Bitboard = [Square(64)]Bitboard{\n")
 // 	for i := range 64 {
 // 		if i < 23 || i > 40 {
 // 			fmt.Fprintf(w, "\t0,\n")
@@ -384,9 +384,9 @@ func sqaureToRankAndFile(i int) (int, int) {
 func genMagicnumbers(w io.Writer) {
 
 	fmt.Fprintf(w, "type Magic struct {\n")
-	fmt.Fprintf(w, " \tAttacks []bitboard\n")
-	fmt.Fprintf(w, " \tMagic bitboard\n")
-	fmt.Fprintf(w, " \tMask bitboard\n")
+	fmt.Fprintf(w, " \tAttacks []Bitboard\n")
+	fmt.Fprintf(w, " \tMagic Bitboard\n")
+	fmt.Fprintf(w, " \tMask Bitboard\n")
 	fmt.Fprintf(w, " \tShift uint8\n")
 	fmt.Fprintf(w, "}\n")
 
@@ -414,7 +414,7 @@ func genMagicnumbers(w io.Writer) {
 		}
 		rookBits := RookBits[sq]
 		magic, attacks, max := findMagicNumber(sq, rookBits, mask, attackFunc)
-		fmt.Fprintf(w, " \n{[]bitboard{\n")
+		fmt.Fprintf(w, " \n{[]Bitboard{\n")
 		for i := range attacks[:max+1] {
 			fmt.Fprintf(w, "\t\t%d,\n", attacks[i])
 		}
@@ -445,7 +445,7 @@ func genMagicnumbers(w io.Writer) {
 		}
 		bishopBits := BishopBits[sq]
 		magic, attacks, max := findMagicNumber(sq, bishopBits, mask, attackFunc)
-		fmt.Fprintf(w, " \n{[]bitboard{\n")
+		fmt.Fprintf(w, " \n{[]Bitboard{\n")
 		for i := range attacks[:max+1] {
 			fmt.Fprintf(w, "\t\t%d,\n", attacks[i])
 		}
@@ -467,8 +467,8 @@ func findMagicNumber(sq, m int, mask uint64, attackFunc func(int, uint64) uint64
 	for i := range 1 << n {
 		blockers[i] = setBitsFromIndexInMask(i, n, mask)
 		attacks[i] = attackFunc(sq, blockers[i])
-		//fmt.Println(Printbitboard(blockers[i]))
-		//fmt.Println(Printbitboard(attacks[i]))
+		//fmt.Println(PrintBitboard(blockers[i]))
+		//fmt.Println(PrintBitboard(attacks[i]))
 	}
 
 	for range 100_000_000 {
@@ -613,7 +613,7 @@ func abs(x int) int {
 }
 
 // for deubgging
-// func printbitboard(b uint64) string {
+// func printBitboard(b uint64) string {
 // 	builder := strings.Builder{}
 
 // 	builder.WriteString("+---+---+---+---+---+---+---+---+\n")

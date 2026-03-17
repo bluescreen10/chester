@@ -35,11 +35,11 @@ const (
 )
 
 type Position struct {
-	pieces [Piece(6)]bitboard
+	pieces [Piece(6)]Bitboard
 
-	allPieces [Color(2)]bitboard
+	allPieces [Color(2)]Bitboard
 
-	EnPassantTarget bitboard
+	EnPassantTarget Bitboard
 
 	FullMoves        uint16
 	HalfMoves        uint8
@@ -55,7 +55,7 @@ func Parse(fen string) (Position, error) {
 		return pos, fmt.Errorf("invalid fen: %s", fen)
 	}
 
-	bit := bitboard(1)
+	bit := Bitboard(1)
 
 	for _, row := range strings.Split(parts[0], "/") {
 		for _, char := range row {
@@ -131,9 +131,9 @@ func Parse(fen string) (Position, error) {
 
 	if sq := SquareFromString(parts[3]); sq != SQ_NULL {
 		if pos.Active() == White {
-			pos.EnPassantTarget = NewbitboardFromSquare(sq + 8)
+			pos.EnPassantTarget = NewBitboardFromSquare(sq + 8)
 		} else {
-			pos.EnPassantTarget = NewbitboardFromSquare(sq - 8)
+			pos.EnPassantTarget = NewBitboardFromSquare(sq - 8)
 		}
 	}
 
@@ -155,7 +155,7 @@ func Parse(fen string) (Position, error) {
 func (p Position) Fen() string {
 	fen := strings.Builder{}
 
-	for bit := bitboard(1); bit != 0; bit <<= 1 {
+	for bit := Bitboard(1); bit != 0; bit <<= 1 {
 		if bit&File_A != 0 && bit > 1 {
 			fen.WriteByte('/')
 		}
@@ -243,7 +243,7 @@ func (p Position) String() string {
 	builder := strings.Builder{}
 
 	builder.WriteString("+---+---+---+---+---+---+---+---+\n")
-	bit := bitboard(1)
+	bit := Bitboard(1)
 	for rank := 7; rank >= 0; rank-- {
 		builder.WriteByte('|')
 		for file := 0; file < 8; file++ {
@@ -307,14 +307,14 @@ func (p *Position) CanBlackCastleQueenSide() bool {
 	return p.CastlingRights&BlackQueenSideCastle != 0
 }
 
-func (p *Position) Occupied() bitboard {
+func (p *Position) Occupied() Bitboard {
 	return p.allPieces[White] | p.allPieces[Black]
 }
 
 func Do(p *Position, m Move) {
 
-	from := bitboard(1) << m.From()
-	to := bitboard(1) << m.To()
+	from := Bitboard(1) << m.From()
+	to := Bitboard(1) << m.To()
 	isCapture := p.Occupied()&to != 0
 	piece := m.Piece()
 	enPassantTarget := p.EnPassantTarget
@@ -365,7 +365,7 @@ func Do(p *Position, m Move) {
 	p.active, p.inactive = p.inactive, p.active
 }
 
-func (p *Position) updateCastlingRights(fromTo bitboard) {
+func (p *Position) updateCastlingRights(fromTo Bitboard) {
 	p.CastlingRights &^= WhiteKingSideCastle * CastlingRights((fromTo&BB_SQ_H1)>>SQ_H1)
 	p.CastlingRights &^= (WhiteKingSideCastle | WhiteQueenSideCastle) * CastlingRights((fromTo&BB_SQ_E1)>>SQ_E1)
 	p.CastlingRights &^= WhiteQueenSideCastle * CastlingRights((fromTo&BB_SQ_A1)>>SQ_A1)
@@ -377,23 +377,23 @@ func (p *Position) updateCastlingRights(fromTo bitboard) {
 
 //func (p *Position) Undo () {}
 
-func (p *Position) move(piece Piece, color Color, from, to bitboard) {
+func (p *Position) move(piece Piece, color Color, from, to Bitboard) {
 	fromAndTo := from | to
 	p.allPieces[color] ^= fromAndTo
 	p.pieces[piece] ^= fromAndTo
 }
 
-func (p *Position) put(piece Piece, color Color, sq bitboard) {
+func (p *Position) put(piece Piece, color Color, sq Bitboard) {
 	p.allPieces[color] |= sq
 	p.pieces[piece] |= sq
 }
 
-func (p *Position) remove(piece Piece, color Color, sq bitboard) {
+func (p *Position) remove(piece Piece, color Color, sq Bitboard) {
 	p.allPieces[color] &^= sq
 	p.pieces[piece] &^= sq
 }
 
-func (p *Position) removeAll(color Color, sq bitboard) {
+func (p *Position) removeAll(color Color, sq Bitboard) {
 	p.allPieces[color] &^= sq
 	p.pieces[Pawn] &^= sq
 	p.pieces[Knight] &^= sq
@@ -403,7 +403,7 @@ func (p *Position) removeAll(color Color, sq bitboard) {
 }
 
 func (p *Position) Get(sq Square) Piece {
-	bit := bitboard(1) << sq
+	bit := Bitboard(1) << sq
 
 	if p.allPieces[p.active]&p.pieces[Pawn]&bit != 0 {
 		return Pawn
@@ -421,114 +421,114 @@ func (p *Position) Get(sq Square) Piece {
 	return Empty
 }
 
-func (p *Position) Pawns() bitboard {
+func (p *Position) Pawns() Bitboard {
 	return p.pieces[Pawn] & p.allPieces[p.active]
 }
 
-func (p *Position) WhitePawns() bitboard {
+func (p *Position) WhitePawns() Bitboard {
 	return p.pieces[Pawn] & p.allPieces[White]
 }
 
-func (p *Position) BlackPawns() bitboard {
+func (p *Position) BlackPawns() Bitboard {
 	return p.pieces[Pawn] & p.allPieces[Black]
 }
 
-func (p *Position) EnemyPawns() bitboard {
+func (p *Position) EnemyPawns() Bitboard {
 	return p.pieces[Pawn] & p.allPieces[p.inactive]
 }
 
-func (p *Position) Knights() bitboard {
+func (p *Position) Knights() Bitboard {
 	return p.pieces[Knight] & p.allPieces[p.active]
 }
 
-func (p *Position) WhiteKnights() bitboard {
+func (p *Position) WhiteKnights() Bitboard {
 	return p.pieces[Knight] & p.allPieces[White]
 }
 
-func (p *Position) BlackKnights() bitboard {
+func (p *Position) BlackKnights() Bitboard {
 	return p.pieces[Pawn] & p.allPieces[Black]
 }
 
-func (p *Position) EnemyKnights() bitboard {
+func (p *Position) EnemyKnights() Bitboard {
 	return p.pieces[Knight] & p.allPieces[p.inactive]
 }
 
-func (p *Position) Bishops() bitboard {
+func (p *Position) Bishops() Bitboard {
 	return p.pieces[Bishop] & p.allPieces[p.active]
 }
 
-func (p *Position) WhiteBishops() bitboard {
+func (p *Position) WhiteBishops() Bitboard {
 	return p.pieces[Bishop] & p.allPieces[White]
 }
 
-func (p *Position) BlackBishops() bitboard {
+func (p *Position) BlackBishops() Bitboard {
 	return p.pieces[Bishop] & p.allPieces[Black]
 }
 
-func (p *Position) EnemyBishops() bitboard {
+func (p *Position) EnemyBishops() Bitboard {
 	return p.pieces[Bishop] & p.allPieces[p.inactive]
 }
 
-func (p *Position) Rooks() bitboard {
+func (p *Position) Rooks() Bitboard {
 	return p.pieces[Rook] & p.allPieces[p.active]
 }
 
-func (p *Position) WhiteRooks() bitboard {
+func (p *Position) WhiteRooks() Bitboard {
 	return p.pieces[Rook] & p.allPieces[White]
 }
 
-func (p *Position) BlackRooks() bitboard {
+func (p *Position) BlackRooks() Bitboard {
 	return p.pieces[Rook] & p.allPieces[Black]
 }
 
-func (p *Position) EnemyRooks() bitboard {
+func (p *Position) EnemyRooks() Bitboard {
 	return p.pieces[Rook] & p.allPieces[p.inactive]
 }
 
-func (p *Position) Queens() bitboard {
+func (p *Position) Queens() Bitboard {
 	return p.pieces[Queen] & p.allPieces[p.active]
 }
 
-func (p *Position) WhiteQueens() bitboard {
+func (p *Position) WhiteQueens() Bitboard {
 	return p.pieces[Queen] & p.allPieces[White]
 }
 
-func (p *Position) BlackQueens() bitboard {
+func (p *Position) BlackQueens() Bitboard {
 	return p.pieces[Queen] & p.allPieces[Black]
 }
 
-func (p *Position) EnemyQueens() bitboard {
+func (p *Position) EnemyQueens() Bitboard {
 	return p.pieces[Queen] & p.allPieces[p.inactive]
 }
 
-func (p *Position) King() bitboard {
+func (p *Position) King() Bitboard {
 	return p.pieces[King] & p.allPieces[p.active]
 }
 
-func (p *Position) WhiteKing() bitboard {
+func (p *Position) WhiteKing() Bitboard {
 	return p.pieces[King] & p.allPieces[White]
 }
 
-func (p *Position) BlackKing() bitboard {
+func (p *Position) BlackKing() Bitboard {
 	return p.pieces[King] & p.allPieces[Black]
 }
 
-func (p *Position) EnemyKing() bitboard {
+func (p *Position) EnemyKing() Bitboard {
 	return p.pieces[King] & p.allPieces[p.inactive]
 }
 
-func (p *Position) EnemyQueensOrBishops() bitboard {
+func (p *Position) EnemyQueensOrBishops() Bitboard {
 	return (p.pieces[Queen] | p.pieces[Bishop]) & p.allPieces[p.inactive]
 }
 
-func (p *Position) EnemyQueensOrRooks() bitboard {
+func (p *Position) EnemyQueensOrRooks() Bitboard {
 	return (p.pieces[Queen] | p.pieces[Rook]) & p.allPieces[p.inactive]
 }
 
-func (p *Position) Enemies() bitboard {
+func (p *Position) Enemies() Bitboard {
 	return p.allPieces[p.inactive]
 }
 
-func (p *Position) EnemiesOrEmpty() bitboard {
+func (p *Position) EnemiesOrEmpty() Bitboard {
 	return ^p.allPieces[p.active]
 }
