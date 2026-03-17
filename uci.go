@@ -25,7 +25,7 @@ type UCIServer struct {
 }
 
 func startUCI() {
-	pos, _ := Parse(DefaultFEN)
+	pos, _ := ParseFEN(DefaultFEN)
 	uci := &UCIServer{pos: pos}
 	uci.Start()
 }
@@ -134,7 +134,7 @@ func (s *UCIServer) handlePosition(args []string) {
 		}
 
 		fen := strings.Join(args[1:i], " ")
-		pos, err := Parse(fen)
+		pos, err := ParseFEN(fen)
 		if err != nil {
 			s.error("error parsing fen: %s", err)
 			return
@@ -261,7 +261,7 @@ func (s *UCIServer) handleDebug(args []string) {
 }
 
 func (s *UCIServer) resetPosition() {
-	pos, err := Parse(DefaultFEN)
+	pos, err := ParseFEN(DefaultFEN)
 	if err != nil {
 		s.error("error parsing fen: %s", err)
 	}

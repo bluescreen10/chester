@@ -25,13 +25,13 @@ const (
 	Empty
 )
 
-type CastlingRights uint8
+type castlingRights uint8
 
 const (
-	WhiteKingSideCastle CastlingRights = 1 << iota
-	WhiteQueenSideCastle
-	BlackKingSideCastle
-	BlackQueenSideCastle
+	whiteKingSideCastle castlingRights = 1 << iota
+	whiteQueenSideCastle
+	blackKingSideCastle
+	blackQueenSideCastle
 )
 
 type Position struct {
@@ -39,15 +39,15 @@ type Position struct {
 
 	allPieces [Color(2)]Bitboard
 
-	EnPassantTarget Bitboard
+	enPassantTarget Bitboard
 
-	FullMoves        uint16
-	HalfMoves        uint8
-	CastlingRights   CastlingRights
+	fullMoves        uint16
+	halfMoves        uint8
+	castlingRights   castlingRights
 	active, inactive Color
 }
 
-func Parse(fen string) (Position, error) {
+func ParseFEN(fen string) (Position, error) {
 	var pos Position
 
 	parts := strings.Split(strings.TrimSpace(fen), " ")
@@ -119,21 +119,21 @@ func Parse(fen string) (Position, error) {
 	for _, c := range parts[2] {
 		switch c {
 		case 'K':
-			pos.CastlingRights |= WhiteKingSideCastle
+			pos.castlingRights |= whiteKingSideCastle
 		case 'Q':
-			pos.CastlingRights |= WhiteQueenSideCastle
+			pos.castlingRights |= whiteQueenSideCastle
 		case 'k':
-			pos.CastlingRights |= BlackKingSideCastle
+			pos.castlingRights |= blackKingSideCastle
 		case 'q':
-			pos.CastlingRights |= BlackQueenSideCastle
+			pos.castlingRights |= blackQueenSideCastle
 		}
 	}
 
 	if sq := SquareFromString(parts[3]); sq != SQ_NULL {
 		if pos.Active() == White {
-			pos.EnPassantTarget = NewBitboardFromSquare(sq + 8)
+			pos.enPassantTarget = NewBitboardFromSquare(sq + 8)
 		} else {
-			pos.EnPassantTarget = NewBitboardFromSquare(sq - 8)
+			pos.enPassantTarget = NewBitboardFromSquare(sq - 8)
 		}
 	}
 
@@ -141,13 +141,13 @@ func Parse(fen string) (Position, error) {
 	if err != nil {
 		return pos, fmt.Errorf("invalid half moves: %s", fen)
 	}
-	pos.HalfMoves = uint8(halfMoves)
+	pos.halfMoves = uint8(halfMoves)
 
 	fullMoves, err := strconv.Atoi(parts[5])
 	if err != nil {
 		return pos, fmt.Errorf("invalid full moves: %s", fen)
 	}
-	pos.FullMoves = uint16(fullMoves)
+	pos.fullMoves = uint16(fullMoves)
 
 	return pos, nil
 }
@@ -230,11 +230,11 @@ func (p Position) Fen() string {
 
 	fen.WriteByte(' ')
 	if p.Active() == White {
-		fen.WriteString((p.EnPassantTarget >> 8).Square().String())
+		fen.WriteString((p.enPassantTarget >> 8).Square().String())
 	} else {
-		fen.WriteString((p.EnPassantTarget << 8).Square().String())
+		fen.WriteString((p.enPassantTarget << 8).Square().String())
 	}
-	fen.WriteString(fmt.Sprintf(" %d %d", p.HalfMoves, p.FullMoves))
+	fen.WriteString(fmt.Sprintf(" %d %d", p.halfMoves, p.fullMoves))
 
 	return fen.String()
 }
@@ -292,19 +292,19 @@ func (p *Position) Inactive() Color {
 }
 
 func (p *Position) CanWhiteCastleKingSide() bool {
-	return p.CastlingRights&WhiteKingSideCastle != 0
+	return p.castlingRights&whiteKingSideCastle != 0
 }
 
 func (p *Position) CanWhiteCastleQueenSide() bool {
-	return p.CastlingRights&WhiteQueenSideCastle != 0
+	return p.castlingRights&whiteQueenSideCastle != 0
 }
 
 func (p *Position) CanBlackCastleKingSide() bool {
-	return p.CastlingRights&BlackKingSideCastle != 0
+	return p.castlingRights&blackKingSideCastle != 0
 }
 
 func (p *Position) CanBlackCastleQueenSide() bool {
-	return p.CastlingRights&BlackQueenSideCastle != 0
+	return p.castlingRights&blackQueenSideCastle != 0
 }
 
 func (p *Position) Occupied() Bitboard {
@@ -317,8 +317,8 @@ func Do(p *Position, m Move) {
 	to := Bitboard(1) << m.To()
 	isCapture := p.Occupied()&to != 0
 	piece := m.Piece()
-	enPassantTarget := p.EnPassantTarget
-	p.EnPassantTarget = 0
+	enPassantTarget := p.enPassantTarget
+	p.enPassantTarget = 0
 
 	switch m.Type() {
 	case Promotion:
@@ -343,7 +343,7 @@ func Do(p *Position, m Move) {
 		p.updateCastlingRights(from)
 	case DoublePush:
 		p.move(Pawn, p.active, from, to)
-		p.EnPassantTarget = to
+		p.enPassantTarget = to
 	default:
 		if isCapture {
 			p.removeAll(p.inactive, to)
@@ -353,26 +353,26 @@ func Do(p *Position, m Move) {
 	}
 
 	if !isCapture && piece != Pawn {
-		p.HalfMoves++
+		p.halfMoves++
 	} else {
-		p.HalfMoves = 0
+		p.halfMoves = 0
 	}
 
 	if p.active == Black {
-		p.FullMoves++
+		p.fullMoves++
 	}
 
 	p.active, p.inactive = p.inactive, p.active
 }
 
 func (p *Position) updateCastlingRights(fromTo Bitboard) {
-	p.CastlingRights &^= WhiteKingSideCastle * CastlingRights((fromTo&BB_SQ_H1)>>SQ_H1)
-	p.CastlingRights &^= (WhiteKingSideCastle | WhiteQueenSideCastle) * CastlingRights((fromTo&BB_SQ_E1)>>SQ_E1)
-	p.CastlingRights &^= WhiteQueenSideCastle * CastlingRights((fromTo&BB_SQ_A1)>>SQ_A1)
+	p.castlingRights &^= whiteKingSideCastle * castlingRights((fromTo&BB_SQ_H1)>>SQ_H1)
+	p.castlingRights &^= (whiteKingSideCastle | whiteQueenSideCastle) * castlingRights((fromTo&BB_SQ_E1)>>SQ_E1)
+	p.castlingRights &^= whiteQueenSideCastle * castlingRights((fromTo&BB_SQ_A1)>>SQ_A1)
 
-	p.CastlingRights &^= BlackKingSideCastle * CastlingRights((fromTo&BB_SQ_H8)>>SQ_H8)
-	p.CastlingRights &^= (BlackKingSideCastle | BlackQueenSideCastle) * CastlingRights((fromTo&BB_SQ_E8)>>SQ_E8)
-	p.CastlingRights &^= BlackQueenSideCastle * CastlingRights((fromTo&BB_SQ_A8)>>SQ_A8)
+	p.castlingRights &^= blackKingSideCastle * castlingRights((fromTo&BB_SQ_H8)>>SQ_H8)
+	p.castlingRights &^= (blackKingSideCastle | blackQueenSideCastle) * castlingRights((fromTo&BB_SQ_E8)>>SQ_E8)
+	p.castlingRights &^= blackQueenSideCastle * castlingRights((fromTo&BB_SQ_A8)>>SQ_A8)
 }
 
 //func (p *Position) Undo () {}
@@ -531,4 +531,16 @@ func (p *Position) Enemies() Bitboard {
 
 func (p *Position) EnemiesOrEmpty() Bitboard {
 	return ^p.allPieces[p.active]
+}
+
+func (p *Position) FullMoves() uint16 {
+	return p.fullMoves
+}
+
+func (p *Position) HalfMoves() uint8 {
+	return p.halfMoves
+}
+
+func (p *Position) EnPassantTarget() Bitboard {
+	return p.enPassantTarget
 }

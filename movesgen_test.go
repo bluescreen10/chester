@@ -9,7 +9,7 @@ import (
 )
 
 func TestMoveGen(t *testing.T) {
-	p, err := chester.Parse(chester.DefaultFEN)
+	p, err := chester.ParseFEN(chester.DefaultFEN)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +73,7 @@ func TestLegalMoves(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		p, err := chester.Parse(test.fen)
+		p, err := chester.ParseFEN(test.fen)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -165,7 +165,7 @@ func TestWhitePawnMoves(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		p, err := chester.Parse(test.fen)
+		p, err := chester.ParseFEN(test.fen)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -252,7 +252,7 @@ func TestBlackPawnMoves(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		p, err := chester.Parse(test.fen)
+		p, err := chester.ParseFEN(test.fen)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -287,7 +287,7 @@ func TestWhiteKnightMoves(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		p, err := chester.Parse(test.fen)
+		p, err := chester.ParseFEN(test.fen)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -317,7 +317,7 @@ func TestBlackKnightMoves(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		p, err := chester.Parse(test.fen)
+		p, err := chester.ParseFEN(test.fen)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -347,7 +347,7 @@ func TestWhiteBishopMoves(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		p, err := chester.Parse(test.fen)
+		p, err := chester.ParseFEN(test.fen)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -377,7 +377,7 @@ func TestBlackBishopMoves(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		p, err := chester.Parse(test.fen)
+		p, err := chester.ParseFEN(test.fen)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -407,7 +407,7 @@ func TestWhiteRookMoves(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		p, err := chester.Parse(test.fen)
+		p, err := chester.ParseFEN(test.fen)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -437,7 +437,7 @@ func TestBlackRookMoves(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		p, err := chester.Parse(test.fen)
+		p, err := chester.ParseFEN(test.fen)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -491,7 +491,7 @@ func TestWhiteQueenMoves(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		p, err := chester.Parse(test.fen)
+		p, err := chester.ParseFEN(test.fen)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -521,7 +521,7 @@ func TestBlackQueenMoves(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		p, err := chester.Parse(test.fen)
+		p, err := chester.ParseFEN(test.fen)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -576,7 +576,7 @@ func TestWhiteKingMoves(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		p, err := chester.Parse(test.fen)
+		p, err := chester.ParseFEN(test.fen)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -631,7 +631,7 @@ func TestBlackKingMoves(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		p, err := chester.Parse(test.fen)
+		p, err := chester.ParseFEN(test.fen)
 		if err != nil {
 			t.Fatal(err)
 		}

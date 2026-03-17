@@ -8,7 +8,7 @@ import (
 
 func TestParseFen(t *testing.T) {
 	fen := "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
-	p, err := chester.Parse(fen)
+	p, err := chester.ParseFEN(fen)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestUpdateWhiteCastlingRights(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		pos, err := chester.Parse(test.fen)
+		pos, err := chester.ParseFEN(test.fen)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -84,7 +84,7 @@ func TestUpdateBlackCastlingRights(t *testing.T) {
 	}{}
 
 	for _, test := range tests {
-		p, err := chester.Parse(test.fen)
+		p, err := chester.ParseFEN(test.fen)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -127,13 +127,13 @@ func TestEnPassant(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		p, err := chester.Parse(test.fen)
+		p, err := chester.ParseFEN(test.fen)
 		if err != nil {
 			t.Fatal(err)
 		}
 
 		chester.Do(&p, test.move)
-		if got := p.EnPassantTarget.Square(); got != test.enPassantTarget {
+		if got := p.EnPassantTarget().Square(); got != test.enPassantTarget {
 			t.Errorf("Do(%s) failed to update en passant Square expected %s got %s", test.move, test.enPassantTarget, got)
 		}
 

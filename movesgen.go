@@ -34,7 +34,7 @@ func LegalMoves(moves []Move, p *Position) ([]Move, bool) {
 		moves = genPawnLeftAttackMoves(moves, p, &cpm)
 		moves = genPawnRightAttackMoves(moves, p, &cpm)
 
-		if p.EnPassantTarget != 0 {
+		if p.EnPassantTarget() != 0 {
 			moves = genPawnEnPassantMoves(moves, p, &cpm)
 		}
 		moves = genKnightMoves(moves, p, &cpm)
@@ -294,10 +294,11 @@ func genPawnEnPassantMoves(moves []Move, p *Position, cpm *checkersPinsAndMask) 
 	enemyQueensOrRooks := p.EnemyQueensOrRooks()
 
 	pawnsOnRank := p.Pawns() &^ (cpm.diagonalPins | cpm.straightPins)
+	enPassantTarget := p.EnPassantTarget()
 
-	left := pawnsOnRank & (File_Not_A & p.EnPassantTarget >> 1)
+	left := pawnsOnRank & (File_Not_A & enPassantTarget >> 1)
 	if left != 0 {
-		occupiedWithoutPawns := p.Occupied() &^ (left | p.EnPassantTarget)
+		occupiedWithoutPawns := p.Occupied() &^ (left | enPassantTarget)
 		path := genRookAttacks(kingSq, occupiedWithoutPawns) & enPassantRanks
 
 		if enemyQueensOrRooks&path == 0 {
@@ -307,9 +308,9 @@ func genPawnEnPassantMoves(moves []Move, p *Position, cpm *checkersPinsAndMask) 
 		}
 	}
 
-	right := pawnsOnRank & (File_Not_H & p.EnPassantTarget << 1)
+	right := pawnsOnRank & (File_Not_H & enPassantTarget << 1)
 	if right != 0 {
-		occupiedWithoutPawns := p.Occupied() &^ (right | p.EnPassantTarget)
+		occupiedWithoutPawns := p.Occupied() &^ (right | enPassantTarget)
 		path := genRookAttacks(kingSq, occupiedWithoutPawns) & enPassantRanks
 
 		if enemyQueensOrRooks&path == 0 {
