@@ -13,7 +13,6 @@ const (
 )
 
 type checkersPinsAndMask struct {
-	checkers     Bitboard
 	diagonalPins Bitboard
 	straightPins Bitboard
 	moveMask     Bitboard
@@ -21,10 +20,10 @@ type checkersPinsAndMask struct {
 
 func LegalMoves(moves []Move, p *Position) ([]Move, bool) {
 	cpm := checkersPinsAndMask{}
-	checkersAndPinned(p, &cpm)
+	numCheckers := checkersAndPinned(p, &cpm)
 	inCheck := true
 
-	switch cpm.checkers.OnesCount() {
+	switch numCheckers {
 	case 0:
 		cpm.moveMask = p.EnemiesOrEmpty()
 		inCheck = false
@@ -48,20 +47,20 @@ func LegalMoves(moves []Move, p *Position) ([]Move, bool) {
 	return moves, inCheck
 }
 
-func checkersAndPinned(p *Position, cpm *checkersPinsAndMask) {
+func checkersAndPinned(p *Position, cpm *checkersPinsAndMask) int {
 	us := p.Active()
 	king := p.King()
 	kingSq, _ := king.PopLSB()
 
 	//cpm := checkersPinsAndMask{}
 
-	cpm.checkers |= knightMoves[kingSq] & p.EnemyKnights()
+	checkers := knightMoves[kingSq] & p.EnemyKnights()
 
 	leftAttacks := int(16*us - 9)
 	rightAttacks := int(16*us - 7)
 	pawns := p.EnemyPawns()
-	cpm.checkers |= (king & File_Not_A).RotateLeft(leftAttacks) & pawns
-	cpm.checkers |= (king & File_Not_H).RotateLeft(rightAttacks) & pawns
+	checkers |= (king & File_Not_A).RotateLeft(leftAttacks) & pawns
+	checkers |= (king & File_Not_H).RotateLeft(rightAttacks) & pawns
 
 	kingDiagonalRays := diagonalRays[kingSq]
 	diagonalAttackers := p.EnemyQueensOrBishops()
@@ -76,7 +75,7 @@ func checkersAndPinned(p *Position, cpm *checkersPinsAndMask) {
 		if potentialyPinned != 0 {
 			switch potentialyPinned.OnesCount() {
 			case 1:
-				cpm.checkers |= 1 << sq
+				checkers |= 1 << sq
 				cpm.moveMask |= path
 			case 2:
 				cpm.diagonalPins |= path
@@ -95,7 +94,7 @@ func checkersAndPinned(p *Position, cpm *checkersPinsAndMask) {
 		if potentialyPinned != 0 {
 			switch potentialyPinned.OnesCount() {
 			case 1:
-				cpm.checkers |= 1 << sq
+				checkers |= 1 << sq
 				cpm.moveMask |= path
 			case 2:
 				cpm.straightPins |= path
@@ -103,7 +102,8 @@ func checkersAndPinned(p *Position, cpm *checkersPinsAndMask) {
 		}
 	}
 
-	cpm.moveMask |= cpm.checkers
+	cpm.moveMask |= checkers
+	return checkers.OnesCount()
 }
 
 func genPawnsAttacks(p *Position) Bitboard {
