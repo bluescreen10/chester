@@ -106,17 +106,17 @@ func eval(p *Position) int {
 		return 0
 	}
 
-	wPawns := (p.AllPieces[White] & p.Pieces[Pawn]).OnesCount()
-	wKnight := (p.AllPieces[White] & p.Pieces[Knight]).OnesCount()
-	wBishop := (p.AllPieces[White] & p.Pieces[Bishop]).OnesCount()
-	wRook := (p.AllPieces[White] & p.Pieces[Rook]).OnesCount()
-	wQueen := (p.AllPieces[White] & p.Pieces[Queen]).OnesCount()
+	wPawns := p.WhitePawns().OnesCount()
+	wKnight := p.WhiteKnights().OnesCount()
+	wBishop := p.WhiteBishops().OnesCount()
+	wRook := p.WhiteRooks().OnesCount()
+	wQueen := p.WhiteQueens().OnesCount()
 
-	bPawns := (p.AllPieces[Black] & p.Pieces[Pawn]).OnesCount()
-	bKnight := (p.AllPieces[Black] & p.Pieces[Knight]).OnesCount()
-	bBishop := (p.AllPieces[Black] & p.Pieces[Bishop]).OnesCount()
-	bRook := (p.AllPieces[Black] & p.Pieces[Rook]).OnesCount()
-	bQueen := (p.AllPieces[Black] & p.Pieces[Queen]).OnesCount()
+	bPawns := p.BlackPawns().OnesCount()
+	bKnight := p.BlackKnights().OnesCount()
+	bBishop := p.BlackBishops().OnesCount()
+	bRook := p.BlackRooks().OnesCount()
+	bQueen := p.BlackQueens().OnesCount()
 
 	return (wPawns + wKnight*3 + wBishop*3 + wRook*5 + wQueen*9 -
 		bPawns - bKnight*3 - bBishop*3 - bRook*5 - bQueen*9) * 100

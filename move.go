@@ -116,7 +116,7 @@ func ParseMove(m string, p Position) (Move, error) {
 	} else {
 		piece := p.Get(from)
 		if piece == Empty {
-			return Move(0), fmt.Errorf("no piece at from square: %s", from)
+			return Move(0), fmt.Errorf("no piece at from Square: %s", from)
 		}
 		return NewMove(from, to, piece), nil
 	}

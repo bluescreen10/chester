@@ -134,7 +134,7 @@ func TestEnPassant(t *testing.T) {
 
 		chester.Do(&p, test.move)
 		if got := p.EnPassantTarget.Square(); got != test.enPassantTarget {
-			t.Errorf("Do(%s) failed to update en passant square expected %s got %s", test.move, test.enPassantTarget, got)
+			t.Errorf("Do(%s) failed to update en passant Square expected %s got %s", test.move, test.enPassantTarget, got)
 		}
 
 		if got := p.Fen(); got != test.after {

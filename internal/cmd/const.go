@@ -197,13 +197,13 @@ func calculateKingMoves() [64]uint64 {
 }
 
 // func generateSquaresBetween(w io.Writer) {
-// 	squaresBetween := calculateSquaresBetween()
+// 	SquaresBetween := calculateSquaresBetween()
 
-// 	fmt.Fprintf(w, "var squaresBetween [Square(64)][Square(64)]bitboard = [Square(64)][Square(64)]bitboard{\n")
+// 	fmt.Fprintf(w, "var SquaresBetween [Square(64)][Square(64)]bitboard = [Square(64)][Square(64)]bitboard{\n")
 // 	for i := range 64 {
 // 		fmt.Fprintf(w, "\t{\n")
 // 		for j := range 64 {
-// 			fmt.Fprintf(w, "\t\t%d,\n", squaresBetween[i][j])
+// 			fmt.Fprintf(w, "\t\t%d,\n", SquaresBetween[i][j])
 // 		}
 // 		fmt.Fprintf(w, "\t},\n")
 // 	}
@@ -211,7 +211,7 @@ func calculateKingMoves() [64]uint64 {
 // }
 
 // func calculateSquaresBetween() [64][64]uint64 {
-// 	squaresBetween := [64][64]uint64{}
+// 	SquaresBetween := [64][64]uint64{}
 // 	rays := calculateRays()
 
 // 	for i := range 64 {
@@ -224,13 +224,13 @@ func calculateKingMoves() [64]uint64 {
 // 			r2, f2 := sqaureToRankAndFile(j)
 
 // 			if r1 == r2 || f1 == f2 {
-// 				squaresBetween[i][j] =
+// 				SquaresBetween[i][j] =
 // 					(rays[North][i] & rays[South][j]) |
 // 						(rays[South][i] & rays[North][j]) |
 // 						(rays[East][i] & rays[West][j]) |
 // 						(rays[West][i] & rays[East][j])
 // 			} else if abs(r1-r2) == abs(f1-f2) {
-// 				squaresBetween[i][j] =
+// 				SquaresBetween[i][j] =
 // 					(rays[NorthEast][i] & rays[SouthWest][j]) |
 // 						(rays[SouthWest][i] & rays[NorthEast][j]) |
 // 						(rays[NorthWest][i] & rays[SouthEast][j]) |
@@ -239,7 +239,7 @@ func calculateKingMoves() [64]uint64 {
 // 		}
 // 	}
 
-// 	return squaresBetween
+// 	return SquaresBetween
 // }
 
 func generateLineFromTo(w io.Writer) {
