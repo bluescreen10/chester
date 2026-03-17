@@ -30,17 +30,17 @@ func LegalMoves(moves []Move, p *Position) ([]Move, bool) {
 		inCheck = false
 		fallthrough
 	case 1:
-		moves = genPawnForwardMoves(moves, p, &cpm)
-		moves = genPawnLeftAttackMoves(moves, p, &cpm)
-		moves = genPawnRightAttackMoves(moves, p, &cpm)
+		moves = genPawnForwardMoves(moves, p, cpm)
+		moves = genPawnLeftAttackMoves(moves, p, cpm)
+		moves = genPawnRightAttackMoves(moves, p, cpm)
 
 		if p.EnPassantTarget() != 0 {
-			moves = genPawnEnPassantMoves(moves, p, &cpm)
+			moves = genPawnEnPassantMoves(moves, p, cpm)
 		}
-		moves = genKnightMoves(moves, p, &cpm)
-		moves = genBishopMoves(moves, p, &cpm)
-		moves = genRookMoves(moves, p, &cpm)
-		moves = genQueenMoves(moves, p, &cpm)
+		moves = genKnightMoves(moves, p, cpm)
+		moves = genBishopMoves(moves, p, cpm)
+		moves = genRookMoves(moves, p, cpm)
+		moves = genQueenMoves(moves, p, cpm)
 		fallthrough
 	default:
 		moves = genKingMoves(moves, p)
@@ -186,7 +186,7 @@ func genKingAttacks(p *Position) Bitboard {
 	return kingMoves[sq]
 }
 
-func genPawnForwardMoves(moves []Move, p *Position, cpm *checkersPinsAndMask) []Move {
+func genPawnForwardMoves(moves []Move, p *Position, cpm checkersPinsAndMask) []Move {
 	us := p.Active()
 	singlePushes := -8 + 16*int(us)
 	startPlusOneRank := (Rank_3 * (1 - Bitboard(us))) | (Rank_6 * Bitboard(us))
@@ -226,7 +226,7 @@ func genPawnForwardMoves(moves []Move, p *Position, cpm *checkersPinsAndMask) []
 	return moves
 }
 
-func genPawnLeftAttackMoves(moves []Move, p *Position, cpm *checkersPinsAndMask) []Move {
+func genPawnLeftAttackMoves(moves []Move, p *Position, cpm checkersPinsAndMask) []Move {
 	us := p.Active()
 	leftAttacks := 16*int(us) - 9
 	pawns := p.Pawns() &^ cpm.straightPins & File_Not_A
@@ -256,7 +256,7 @@ func genPawnLeftAttackMoves(moves []Move, p *Position, cpm *checkersPinsAndMask)
 	return moves
 }
 
-func genPawnRightAttackMoves(moves []Move, p *Position, cpm *checkersPinsAndMask) []Move {
+func genPawnRightAttackMoves(moves []Move, p *Position, cpm checkersPinsAndMask) []Move {
 	us := p.Active()
 	rightAttacks := 16*int(us) - 7
 
@@ -286,7 +286,7 @@ func genPawnRightAttackMoves(moves []Move, p *Position, cpm *checkersPinsAndMask
 	return moves
 }
 
-func genPawnEnPassantMoves(moves []Move, p *Position, cpm *checkersPinsAndMask) []Move {
+func genPawnEnPassantMoves(moves []Move, p *Position, cpm checkersPinsAndMask) []Move {
 	const enPassantRanks = Rank_5 | Rank_4
 	us := p.Active()
 
@@ -323,7 +323,7 @@ func genPawnEnPassantMoves(moves []Move, p *Position, cpm *checkersPinsAndMask) 
 	return moves
 }
 
-func genKnightMoves(moves []Move, p *Position, cpm *checkersPinsAndMask) []Move {
+func genKnightMoves(moves []Move, p *Position, cpm checkersPinsAndMask) []Move {
 	knights := p.Knights() &^ (cpm.diagonalPins | cpm.straightPins)
 	var from, to Square
 	for knights != 0 {
@@ -340,7 +340,7 @@ func genKnightMoves(moves []Move, p *Position, cpm *checkersPinsAndMask) []Move 
 	return moves
 }
 
-func genBishopMoves(moves []Move, p *Position, cpm *checkersPinsAndMask) []Move {
+func genBishopMoves(moves []Move, p *Position, cpm checkersPinsAndMask) []Move {
 	bishops := p.Bishops() &^ cpm.straightPins
 
 	var from, to Square
@@ -367,7 +367,7 @@ func genBishopMoves(moves []Move, p *Position, cpm *checkersPinsAndMask) []Move 
 	return moves
 }
 
-func genRookMoves(moves []Move, p *Position, cpm *checkersPinsAndMask) []Move {
+func genRookMoves(moves []Move, p *Position, cpm checkersPinsAndMask) []Move {
 	rooks := p.Rooks() &^ cpm.diagonalPins
 
 	var from, to Square
@@ -394,7 +394,7 @@ func genRookMoves(moves []Move, p *Position, cpm *checkersPinsAndMask) []Move {
 	return moves
 }
 
-func genQueenMoves(moves []Move, p *Position, cpm *checkersPinsAndMask) []Move {
+func genQueenMoves(moves []Move, p *Position, cpm checkersPinsAndMask) []Move {
 	queens := p.Queens()
 	//enemiesOrEmpty := ^p.AllPieces[us] & cpm.moveMask
 	occupied := p.Occupied()
