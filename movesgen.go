@@ -16,7 +16,6 @@ type checkersPinsAndMask struct {
 	checkers     Bitboard
 	diagonalPins Bitboard
 	straightPins Bitboard
-	allPins      Bitboard
 	moveMask     Bitboard
 }
 
@@ -105,7 +104,6 @@ func checkersAndPinned(p *Position, cpm *checkersPinsAndMask) {
 	}
 
 	cpm.moveMask |= cpm.checkers
-	cpm.allPins = cpm.diagonalPins | cpm.straightPins
 }
 
 func genPawnsAttacks(p *Position) Bitboard {
@@ -295,7 +293,7 @@ func genPawnEnPassantMoves(moves []Move, p *Position, cpm *checkersPinsAndMask) 
 	kingSq, _ := p.King().PopLSB()
 	enemyQueensOrRooks := p.EnemyQueensOrRooks()
 
-	pawnsOnRank := p.Pawns() &^ cpm.allPins
+	pawnsOnRank := p.Pawns() &^ (cpm.diagonalPins | cpm.straightPins)
 
 	left := pawnsOnRank & (File_Not_A & p.EnPassantTarget >> 1)
 	if left != 0 {
@@ -325,7 +323,7 @@ func genPawnEnPassantMoves(moves []Move, p *Position, cpm *checkersPinsAndMask) 
 }
 
 func genKnightMoves(moves []Move, p *Position, cpm *checkersPinsAndMask) []Move {
-	knights := p.Knights() &^ cpm.allPins
+	knights := p.Knights() &^ (cpm.diagonalPins | cpm.straightPins)
 	var from, to Square
 	for knights != 0 {
 		from, knights = knights.PopLSB()
@@ -421,7 +419,7 @@ func genQueenMoves(moves []Move, p *Position, cpm *checkersPinsAndMask) []Move {
 		}
 	}
 
-	for q := queens &^ cpm.allPins; q != 0; {
+	for q := queens &^ (cpm.diagonalPins | cpm.straightPins); q != 0; {
 		from, q = q.PopLSB()
 		targets := (genRookAttacks(from, occupied) | genBishopAttacks(from, occupied)) & cpm.moveMask
 
