@@ -21,7 +21,8 @@ type checkersPinsAndMask struct {
 }
 
 func LegalMoves(moves []Move, p *Position) ([]Move, bool) {
-	cpm := checkersAndPinned(p)
+	cpm := checkersPinsAndMask{}
+	checkersAndPinned(p, &cpm)
 	inCheck := true
 
 	switch cpm.checkers.OnesCount() {
@@ -48,12 +49,12 @@ func LegalMoves(moves []Move, p *Position) ([]Move, bool) {
 	return moves, inCheck
 }
 
-func checkersAndPinned(p *Position) checkersPinsAndMask {
+func checkersAndPinned(p *Position, cpm *checkersPinsAndMask) {
 	us := p.Active()
 	king := p.King()
 	kingSq, _ := king.PopLSB()
 
-	cpm := checkersPinsAndMask{}
+	//cpm := checkersPinsAndMask{}
 
 	cpm.checkers |= knightMoves[kingSq] & p.EnemyKnights()
 
@@ -73,12 +74,14 @@ func checkersAndPinned(p *Position) checkersPinsAndMask {
 
 		path := lineFromTo[kingSq][sq]
 		potentialyPinned := path & p.Occupied()
-		switch potentialyPinned.OnesCount() {
-		case 1:
-			cpm.checkers |= 1 << sq
-			cpm.moveMask |= path
-		case 2:
-			cpm.diagonalPins |= path
+		if potentialyPinned != 0 {
+			switch potentialyPinned.OnesCount() {
+			case 1:
+				cpm.checkers |= 1 << sq
+				cpm.moveMask |= path
+			case 2:
+				cpm.diagonalPins |= path
+			}
 		}
 	}
 
@@ -90,18 +93,19 @@ func checkersAndPinned(p *Position) checkersPinsAndMask {
 
 		path := lineFromTo[kingSq][sq]
 		potentialyPinned := path & p.Occupied()
-		switch potentialyPinned.OnesCount() {
-		case 1:
-			cpm.checkers |= 1 << sq
-			cpm.moveMask |= path
-		case 2:
-			cpm.straightPins |= path
+		if potentialyPinned != 0 {
+			switch potentialyPinned.OnesCount() {
+			case 1:
+				cpm.checkers |= 1 << sq
+				cpm.moveMask |= path
+			case 2:
+				cpm.straightPins |= path
+			}
 		}
 	}
 
 	cpm.moveMask |= cpm.checkers
 	cpm.allPins = cpm.diagonalPins | cpm.straightPins
-	return cpm
 }
 
 func genPawnsAttacks(p *Position) Bitboard {
