@@ -31,7 +31,7 @@ func comparechesterAndStockfish(t *testing.T, depth int, moves string) {
 	sfMoves, fen := sfPerft(depth, moves)
 
 	// Run our engine
-	p, err := chester.Parse(fen)
+	p, err := chester.ParseFEN(fen)
 	if err != nil {
 		t.Fatal(err)
 	}

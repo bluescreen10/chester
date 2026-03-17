@@ -446,7 +446,7 @@ func (p *Position) WhiteKnights() Bitboard {
 }
 
 func (p *Position) BlackKnights() Bitboard {
-	return p.pieces[Pawn] & p.allPieces[Black]
+	return p.pieces[Knight] & p.allPieces[Black]
 }
 
 func (p *Position) EnemyKnights() Bitboard {
