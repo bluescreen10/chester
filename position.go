@@ -311,7 +311,7 @@ func (p *Position) Occupied() Bitboard {
 	return p.allPieces[White] | p.allPieces[Black]
 }
 
-func Do(p *Position, m Move) {
+func (p *Position) Do(m Move) {
 
 	from := Bitboard(1) << m.From()
 	to := Bitboard(1) << m.To()

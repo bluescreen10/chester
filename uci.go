@@ -156,7 +156,7 @@ func (s *UCIServer) handlePosition(args []string) {
 				s.error("error parsing move: %s", err)
 				return
 			}
-			Do(p, move)
+			p.Do(move)
 			s.debug("position: %s", s.pos.String())
 		}
 	}

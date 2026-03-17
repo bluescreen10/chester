@@ -51,7 +51,7 @@ func minmax(p *Position, alpha, beta, depth int) (int, Move) {
 		best := moves[0]
 		for _, m := range moves {
 			newP := *p
-			Do(&newP, m)
+			newP.Do(m)
 			eval, _ := minmax(&newP, alpha, beta, depth-1)
 			if eval > max {
 				best = m
@@ -71,7 +71,7 @@ func minmax(p *Position, alpha, beta, depth int) (int, Move) {
 		best := moves[0]
 		for _, m := range moves {
 			newP := *p
-			Do(&newP, m)
+			newP.Do(m)
 			eval, _ := minmax(&newP, alpha, beta, depth-1)
 			if eval <= min {
 				best = m
