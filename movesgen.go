@@ -64,7 +64,7 @@ func checkersAndPinned(p *Position, cpm *checkersPinsAndMask) {
 	cpm.checkers |= (king & File_Not_A).RotateLeft(leftAttacks) & pawns
 	cpm.checkers |= (king & File_Not_H).RotateLeft(rightAttacks) & pawns
 
-	kingDiagonalRays := rays[NorthWest][kingSq] | rays[NorthEast][kingSq] | rays[SouthWest][kingSq] | rays[SouthEast][kingSq]
+	kingDiagonalRays := diagonalRays[kingSq]
 	diagonalAttackers := p.EnemyQueensOrBishops()
 
 	var sq Square
@@ -85,7 +85,7 @@ func checkersAndPinned(p *Position, cpm *checkersPinsAndMask) {
 		}
 	}
 
-	kingStraightRays := rays[North][kingSq] | rays[South][kingSq] | rays[East][kingSq] | rays[West][kingSq]
+	kingStraightRays := straightRays[kingSq]
 	straightAttackers := p.EnemyQueensOrRooks()
 
 	for potentialCheckers := straightAttackers & kingStraightRays; potentialCheckers != 0; {
