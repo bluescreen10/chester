@@ -2,3 +2,5 @@
 .vscode
 chester
 uci.log
+.env
+build/

@@ -178,6 +178,8 @@ func (s *UCIServer) handleGo(args []string) {
 			s.info("depth %d score cp %d pv %s", e.depth, e.score, e.best)
 			s.bestMove = e.best
 		}
+
+		s.WriteString("bestmove %s", s.bestMove)
 	}()
 }
 

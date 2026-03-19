@@ -1,0 +1,24 @@
+token: "${LICHESS_TOKEN}"
+url: "https://lichess.org/"
+
+engine:
+  name: "Chester"
+  cmd: ./chester
+  dir: "/lichess-bot/config"
+  protocol: uci
+
+challenge:
+  accept_bot: true
+  accept_human: true
+
+  variants:
+    - standard
+
+  time_controls:
+    - bullet
+    - blitz
+    - rapid
+  
+  modes:
+    - rated
+    - casual
