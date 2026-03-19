@@ -94,7 +94,7 @@ func (m Move) Piece() Piece {
 }
 
 func (m Move) PromoPiece() Piece {
-	return Piece(m >> 12 & 0x03)
+	return Piece((m>>12)&0x03 + 1)
 }
 
 func ParseMove(m string, p Position) (Move, error) {

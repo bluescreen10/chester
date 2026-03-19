@@ -18,5 +18,6 @@ docker rm -f Chester || true
 
 docker run -d \
   -v ${PWD}/build:/lichess-bot/config \
+  --env OPTIONS=-v \
   --name Chester \
   lichessbotdevs/lichess-bot

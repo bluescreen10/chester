@@ -16,11 +16,11 @@ const (
 type Piece uint8
 
 const (
-	Knight Piece = iota
+	Pawn = Piece(iota)
+	Knight
 	Bishop
 	Rook
 	Queen
-	Pawn
 	King
 	Empty
 )
