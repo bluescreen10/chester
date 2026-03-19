@@ -35,16 +35,15 @@ const (
 )
 
 type Position struct {
-	pieces [Piece(6)]Bitboard
-
+	pieces    [Piece(5)]Bitboard
 	allPieces [Color(2)]Bitboard
+	kings     [Color(2)]Square
 
-	enPassantTarget Bitboard
-
-	fullMoves        uint16
-	halfMoves        uint8
-	castlingRights   castlingRights
-	active, inactive Color
+	enPassantTarget Square
+	castlingRights  castlingRights
+	active          Color
+	halfMoves       uint8
+	fullMoves       uint16
 }
 
 func ParseFEN(fen string) (Position, error) {
@@ -76,7 +75,7 @@ func ParseFEN(fen string) (Position, error) {
 				pos.pieces[Queen] |= bit
 				pos.allPieces[White] |= bit
 			case 'K':
-				pos.pieces[King] |= bit
+				pos.kings[White] = bit.Square()
 				pos.allPieces[White] |= bit
 			case 'p':
 				pos.pieces[Pawn] |= bit
@@ -94,7 +93,7 @@ func ParseFEN(fen string) (Position, error) {
 				pos.pieces[Queen] |= bit
 				pos.allPieces[Black] |= bit
 			case 'k':
-				pos.pieces[King] |= bit
+				pos.kings[Black] = bit.Square()
 				pos.allPieces[Black] |= bit
 			case '1', '2', '3', '4', '5', '6', '7', '8':
 				bit <<= uint(char - '1')
@@ -105,15 +104,10 @@ func ParseFEN(fen string) (Position, error) {
 		}
 	}
 
-	// pos.State = statePool.Get().(*State)
-	// pos.State.Reset()
-
 	if parts[1] == "w" || parts[1] == "W" {
 		pos.active = White
-		pos.inactive = Black
 	} else {
 		pos.active = Black
-		pos.inactive = White
 	}
 
 	for _, c := range parts[2] {
@@ -131,9 +125,9 @@ func ParseFEN(fen string) (Position, error) {
 
 	if sq := SquareFromString(parts[3]); sq != SQ_NULL {
 		if pos.Active() == White {
-			pos.enPassantTarget = NewBitboardFromSquare(sq + 8)
+			pos.enPassantTarget = sq + 8
 		} else {
-			pos.enPassantTarget = NewBitboardFromSquare(sq - 8)
+			pos.enPassantTarget = sq - 8
 		}
 	}
 
@@ -180,9 +174,9 @@ func (p Position) Fen() string {
 			fen.WriteByte('Q')
 		} else if p.allPieces[Black]&p.pieces[Queen]&bit != 0 {
 			fen.WriteByte('q')
-		} else if p.allPieces[White]&p.pieces[King]&bit != 0 {
+		} else if p.kings[White] == bit.Square() {
 			fen.WriteByte('K')
-		} else if p.allPieces[Black]&p.pieces[King]&bit != 0 {
+		} else if p.kings[Black] == bit.Square() {
 			fen.WriteByte('k')
 		} else {
 			empty := 1
@@ -230,9 +224,9 @@ func (p Position) Fen() string {
 
 	fen.WriteByte(' ')
 	if p.Active() == White {
-		fen.WriteString((p.enPassantTarget >> 8).Square().String())
+		fen.WriteString((p.enPassantTarget >> 8).String())
 	} else {
-		fen.WriteString((p.enPassantTarget << 8).Square().String())
+		fen.WriteString((p.enPassantTarget << 8).String())
 	}
 	fen.WriteString(fmt.Sprintf(" %d %d", p.halfMoves, p.fullMoves))
 
@@ -267,9 +261,9 @@ func (p Position) String() string {
 				builder.WriteString(" Q |")
 			} else if p.allPieces[Black]&p.pieces[Queen]&bit != 0 {
 				builder.WriteString(" q |")
-			} else if p.allPieces[White]&p.pieces[King]&bit != 0 {
+			} else if p.kings[White] == bit.Square() {
 				builder.WriteString(" K |")
-			} else if p.allPieces[Black]&p.pieces[King]&bit != 0 {
+			} else if p.kings[Black] == bit.Square() {
 				builder.WriteString(" k |")
 			} else {
 				builder.WriteString("   |")
@@ -288,7 +282,7 @@ func (p *Position) Active() Color {
 }
 
 func (p *Position) Inactive() Color {
-	return p.inactive
+	return p.active ^ 0x01
 }
 
 func (p *Position) CanWhiteCastleKingSide() bool {
@@ -323,32 +317,39 @@ func (p *Position) Do(m Move) {
 	switch m.Type() {
 	case Promotion:
 		if isCapture {
-			p.removeAll(p.inactive, to)
+			p.removeAll(p.active^0x01, to)
 			p.updateCastlingRights(from | to)
 		}
 		p.remove(Pawn, p.active, from)
 		p.put(m.PromoPiece(), p.active, to)
 
 	case EnPassant:
-		p.remove(Pawn, p.inactive, enPassantTarget)
+		p.remove(Pawn, p.active^0x01, 1<<enPassantTarget)
 		p.move(Pawn, p.active, from, to)
 	case CastleKingSide:
-		p.move(King, p.active, from, to)
+		p.kings[p.active] = m.To()
+		p.allPieces[p.active] ^= from | to
 		p.move(Rook, p.active, from>>3, from>>1)
 		p.updateCastlingRights(from)
 
 	case CastleQueenSide:
-		p.move(King, p.active, from, to)
+		p.kings[p.active] = m.To()
+		p.allPieces[p.active] ^= from | to
 		p.move(Rook, p.active, from<<4, from<<2)
 		p.updateCastlingRights(from)
 	case DoublePush:
 		p.move(Pawn, p.active, from, to)
-		p.enPassantTarget = to
+		p.enPassantTarget = m.To()
 	default:
 		if isCapture {
-			p.removeAll(p.inactive, to)
+			p.removeAll(p.active^0x01, to)
 		}
-		p.move(piece, p.active, from, to)
+		if piece == King {
+			p.kings[p.active] = m.To()
+			p.allPieces[p.active] ^= from | to
+		} else {
+			p.move(piece, p.active, from, to)
+		}
 		p.updateCastlingRights(from | to)
 	}
 
@@ -362,7 +363,7 @@ func (p *Position) Do(m Move) {
 		p.fullMoves++
 	}
 
-	p.active, p.inactive = p.inactive, p.active
+	p.active ^= 0x01
 }
 
 func (p *Position) updateCastlingRights(fromTo Bitboard) {
@@ -415,7 +416,7 @@ func (p *Position) Get(sq Square) Piece {
 		return Rook
 	} else if p.allPieces[p.active]&p.pieces[Queen]&bit != 0 {
 		return Queen
-	} else if p.allPieces[p.active]&p.pieces[King]&bit != 0 {
+	} else if p.kings[p.active] == bit.Square() {
 		return King
 	}
 	return Empty
@@ -434,7 +435,7 @@ func (p *Position) BlackPawns() Bitboard {
 }
 
 func (p *Position) EnemyPawns() Bitboard {
-	return p.pieces[Pawn] & p.allPieces[p.inactive]
+	return p.pieces[Pawn] & p.allPieces[p.active^0x01]
 }
 
 func (p *Position) Knights() Bitboard {
@@ -450,7 +451,7 @@ func (p *Position) BlackKnights() Bitboard {
 }
 
 func (p *Position) EnemyKnights() Bitboard {
-	return p.pieces[Knight] & p.allPieces[p.inactive]
+	return p.pieces[Knight] & p.allPieces[p.active^0x01]
 }
 
 func (p *Position) Bishops() Bitboard {
@@ -466,7 +467,7 @@ func (p *Position) BlackBishops() Bitboard {
 }
 
 func (p *Position) EnemyBishops() Bitboard {
-	return p.pieces[Bishop] & p.allPieces[p.inactive]
+	return p.pieces[Bishop] & p.allPieces[p.active^0x01]
 }
 
 func (p *Position) Rooks() Bitboard {
@@ -482,7 +483,7 @@ func (p *Position) BlackRooks() Bitboard {
 }
 
 func (p *Position) EnemyRooks() Bitboard {
-	return p.pieces[Rook] & p.allPieces[p.inactive]
+	return p.pieces[Rook] & p.allPieces[p.active^0x01]
 }
 
 func (p *Position) Queens() Bitboard {
@@ -498,35 +499,35 @@ func (p *Position) BlackQueens() Bitboard {
 }
 
 func (p *Position) EnemyQueens() Bitboard {
-	return p.pieces[Queen] & p.allPieces[p.inactive]
+	return p.pieces[Queen] & p.allPieces[p.active^0x01]
 }
 
 func (p *Position) King() Bitboard {
-	return p.pieces[King] & p.allPieces[p.active]
+	return NewBitboardFromSquare(p.kings[p.active])
 }
 
 func (p *Position) WhiteKing() Bitboard {
-	return p.pieces[King] & p.allPieces[White]
+	return NewBitboardFromSquare(p.kings[White])
 }
 
 func (p *Position) BlackKing() Bitboard {
-	return p.pieces[King] & p.allPieces[Black]
+	return NewBitboardFromSquare(p.kings[Black])
 }
 
 func (p *Position) EnemyKing() Bitboard {
-	return p.pieces[King] & p.allPieces[p.inactive]
+	return NewBitboardFromSquare(p.kings[p.active^0x01])
 }
 
 func (p *Position) EnemyQueensOrBishops() Bitboard {
-	return (p.pieces[Queen] | p.pieces[Bishop]) & p.allPieces[p.inactive]
+	return (p.pieces[Queen] | p.pieces[Bishop]) & p.allPieces[p.active^0x01]
 }
 
 func (p *Position) EnemyQueensOrRooks() Bitboard {
-	return (p.pieces[Queen] | p.pieces[Rook]) & p.allPieces[p.inactive]
+	return (p.pieces[Queen] | p.pieces[Rook]) & p.allPieces[p.active^0x01]
 }
 
 func (p *Position) Enemies() Bitboard {
-	return p.allPieces[p.inactive]
+	return p.allPieces[p.active^0x01]
 }
 
 func (p *Position) EnemiesOrEmpty() Bitboard {
@@ -542,5 +543,5 @@ func (p *Position) HalfMoves() uint8 {
 }
 
 func (p *Position) EnPassantTarget() Bitboard {
-	return p.enPassantTarget
+	return 1 << p.enPassantTarget
 }

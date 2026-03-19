@@ -1,5 +1,10 @@
 package main
 
+import (
+	"fmt"
+	"unsafe"
+)
+
 const (
 	DefaultFEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 	BotName    = "Chester"
@@ -7,6 +12,6 @@ const (
 )
 
 func main() {
-	//fmt.Println(unsafe.Sizeof(Position{}))
+	fmt.Println(unsafe.Sizeof(Position{}))
 	startUCI()
 }
