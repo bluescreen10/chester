@@ -21,42 +21,37 @@ func TestUpdateWhiteCastlingRights(t *testing.T) {
 	tests := []struct {
 		fen      string
 		move     chester.Move
-		expected []bool
+		expected string
 	}{
 		{
 			fen:      "4k3/8/8/8/3b4/8/8/R3K2R w KQ - 0 1",
 			move:     chester.NewCastleKingSideMove(chester.SQ_E1, chester.SQ_G1),
-			expected: []bool{false, false},
-		},
-		{
-			fen:      "4k3/8/8/8/3b4/8/8/R3K2R w KQ - 0 1",
-			move:     chester.NewCastleKingSideMove(chester.SQ_E1, chester.SQ_G1),
-			expected: []bool{false, false},
+			expected: "4k3/8/8/8/3b4/8/8/R4RK1 b - - 1 1",
 		},
 		{
 			fen:      "4k3/8/8/8/3b4/8/8/R3K2R w KQ - 0 1",
 			move:     chester.NewCastleQueenSideMove(chester.SQ_E1, chester.SQ_C1),
-			expected: []bool{false, false},
+			expected: "4k3/8/8/8/3b4/8/8/2KR3R b - - 1 1",
 		},
 		{
 			fen:      "4k3/8/8/8/3b4/8/8/R3K2R w KQ - 0 1",
 			move:     chester.NewMove(chester.SQ_A1, chester.SQ_B1, chester.Rook),
-			expected: []bool{true, false},
+			expected: "4k3/8/8/8/3b4/8/8/1R2K2R b K - 1 1",
 		},
 		{
 			fen:      "4k3/8/8/8/3b4/8/8/R3K2R w KQ - 0 1",
 			move:     chester.NewMove(chester.SQ_H1, chester.SQ_G1, chester.Rook),
-			expected: []bool{false, true},
+			expected: "4k3/8/8/8/3b4/8/8/R3K1R1 b Q - 1 1",
 		},
 		{
 			fen:      "4k3/8/8/8/3b4/8/8/R3K2R b KQ - 0 1",
 			move:     chester.NewMove(chester.SQ_D4, chester.SQ_A1, chester.Bishop),
-			expected: []bool{true, false},
+			expected: "4k3/8/8/8/8/8/8/b3K2R w K - 0 2",
 		},
 		{
 			fen:      "4k3/8/8/8/4b3/8/8/R3K2R b KQ - 0 1",
 			move:     chester.NewMove(chester.SQ_E4, chester.SQ_H1, chester.Bishop),
-			expected: []bool{false, true},
+			expected: "4k3/8/8/8/8/8/8/R3K2b w Q - 0 2",
 		},
 	}
 
@@ -67,11 +62,8 @@ func TestUpdateWhiteCastlingRights(t *testing.T) {
 		}
 
 		pos.Do(test.move)
-		if got := pos.CanWhiteCastleKingSide(); got != test.expected[0] {
-			t.Errorf("Do(%s) failed to update white king side castling rights expected %v got %v", test.move, test.expected[0], got)
-		}
-		if got := pos.CanWhiteCastleQueenSide(); got != test.expected[1] {
-			t.Errorf("Do(%s) failed to update white queen side castling rights expected %v got %v", test.move, test.expected[1], got)
+		if got := pos.Fen(); got != test.expected {
+			t.Errorf("Do(%s) failed to update position expected %s got %s", test.move, test.expected, got)
 		}
 	}
 }

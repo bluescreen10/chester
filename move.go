@@ -118,6 +118,15 @@ func ParseMove(m string, p Position) (Move, error) {
 		if piece == Empty {
 			return Move(0), fmt.Errorf("no piece at from Square: %s", from)
 		}
+
+		if piece == King {
+			if (from == SQ_E1 && to == SQ_G1) || (from == SQ_E8 && to == SQ_G8) {
+				return NewCastleKingSideMove(from, to), nil
+			} else if (from == SQ_E1 && to == SQ_C1) || (from == SQ_E8 && to == SQ_C8) {
+				return NewCastleQueenSideMove(from, to), nil
+			}
+		}
+
 		return NewMove(from, to, piece), nil
 	}
 }

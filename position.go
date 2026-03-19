@@ -315,7 +315,7 @@ func (p *Position) Do(m Move) {
 
 	from := Bitboard(1) << m.From()
 	to := Bitboard(1) << m.To()
-	isCapture := p.Occupied()&to != 0
+	isCapture := p.Enemies()&to != 0
 	piece := m.Piece()
 	enPassantTarget := p.enPassantTarget
 	p.enPassantTarget = 0
@@ -330,16 +330,25 @@ func (p *Position) Do(m Move) {
 		p.put(m.PromoPiece(), p.active, to)
 
 	case EnPassant:
+		isCapture = true
 		p.remove(Pawn, p.inactive, enPassantTarget)
 		p.move(Pawn, p.active, from, to)
 	case CastleKingSide:
 		p.move(King, p.active, from, to)
-		p.move(Rook, p.active, from>>3, from>>1)
+		if p.active == White {
+			p.move(Rook, White, BB_SQ_H1, BB_SQ_F1)
+		} else {
+			p.move(Rook, Black, BB_SQ_H8, BB_SQ_F8)
+		}
 		p.updateCastlingRights(from)
 
 	case CastleQueenSide:
 		p.move(King, p.active, from, to)
-		p.move(Rook, p.active, from<<4, from<<2)
+		if p.active == White {
+			p.move(Rook, White, BB_SQ_A1, BB_SQ_D1)
+		} else {
+			p.move(Rook, Black, BB_SQ_A8, BB_SQ_D8)
+		}
 		p.updateCastlingRights(from)
 	case DoublePush:
 		p.move(Pawn, p.active, from, to)

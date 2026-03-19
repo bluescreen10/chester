@@ -151,13 +151,16 @@ func (s *UCIServer) handlePosition(args []string) {
 
 	if len(args) > 0 && args[0] == "moves" {
 		for _, m := range args[1:] {
-			move, err := ParseMove(m, *p)
-			if err != nil {
-				s.error("error parsing move: %s", err)
-				return
+			m = strings.TrimSpace(m)
+			if m != "" {
+				move, err := ParseMove(m, *p)
+				if err != nil {
+					s.error("error parsing move: %s", err)
+					return
+				}
+				p.Do(move)
+				s.debug("position: %s", s.pos.String())
 			}
-			p.Do(move)
-			s.debug("position: %s", s.pos.String())
 		}
 	}
 	s.pos = *p
@@ -173,7 +176,8 @@ func (s *UCIServer) handleGo(args []string) {
 	s.stopFunc = f
 
 	go func() {
-		ch := SearchBestMove(ctx, &s.pos)
+		pos := s.pos
+		ch := SearchBestMove(ctx, &pos)
 		for e := range ch {
 			s.info("depth %d score cp %d pv %s", e.depth, e.score, e.best)
 			s.bestMove = e.best
