@@ -8,12 +8,17 @@ import (
 
 func TestParseFen(t *testing.T) {
 	fen := "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+	expectedHash := 0x463b96181691fc9c
 	p, err := chester.ParseFEN(fen)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got := p.Fen(); got != fen {
-		t.Fatalf("Parse() got %s, want %s", got, fen)
+		t.Fatalf("ParseFen: got %s, want %s", got, fen)
+	}
+
+	if got := p.Hash(); got != uint64(expectedHash) {
+		t.Fatalf("ParseFen: invalid hash got 0x%x, want 0x%x", got, expectedHash)
 	}
 }
 

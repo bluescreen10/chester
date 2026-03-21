@@ -35,9 +35,9 @@ const (
 )
 
 type Position struct {
-	pieces [Piece(6)]Bitboard
-
+	pieces    [Piece(6)]Bitboard
 	allPieces [Color(2)]Bitboard
+	hash      uint64
 
 	enPassantTarget Bitboard
 
@@ -149,6 +149,7 @@ func ParseFEN(fen string) (Position, error) {
 	}
 	pos.fullMoves = uint16(fullMoves)
 
+	pos.hash = computeHash(&pos)
 	return pos, nil
 }
 
@@ -552,4 +553,52 @@ func (p *Position) HalfMoves() uint8 {
 
 func (p *Position) EnPassantTarget() Bitboard {
 	return p.enPassantTarget
+}
+
+func (p *Position) Hash() uint64 {
+	return p.hash
+}
+
+func computeHash(p *Position) uint64 {
+	var hash uint64
+
+	for color := range Color(2) {
+		for piece, bb := range p.pieces {
+			bb = bb & p.allPieces[color]
+			var sq Square
+			for bb != 0 {
+				sq, bb = bb.PopLSB()
+				hash ^= zobrist.Pieces[color][piece][sq]
+			}
+		}
+	}
+
+	if p.CanWhiteCastleKingSide() {
+		hash ^= zobrist.Castling[0]
+	}
+
+	if p.CanWhiteCastleQueenSide() {
+		hash ^= zobrist.Castling[1]
+	}
+
+	if p.CanBlackCastleKingSide() {
+		hash ^= zobrist.Castling[2]
+	}
+
+	if p.CanBlackCastleQueenSide() {
+		hash ^= zobrist.Castling[3]
+	}
+
+	//FIXME: only if they are actually adjancent pawns
+	if p.EnPassantTarget() != 0 {
+		sq, _ := p.EnPassantTarget().PopLSB()
+		file := sq.File()
+		hash ^= zobrist.EnPassant[file]
+	}
+
+	if p.Active() == White {
+		hash ^= zobrist.WhiteToMove
+	}
+
+	return hash
 }

@@ -4,3 +4,4 @@ chester
 uci.log
 .env
 build/
+__debug_bin*
