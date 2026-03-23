@@ -1,23 +1,51 @@
 package chester
 
+// Castling path constants define the squares that must be unoccupied (Free)
+// or not under attack (NotAttacked) for each castling option.
+//
+// Free squares are all squares between the king and rook (exclusive).
+// NotAttacked squares are those the king passes through or lands on.
 const (
-	WhiteQueenSideCastleFree        = BB_SQ_B1 | BB_SQ_C1 | BB_SQ_D1
-	WhiteQueenSideCastleNotAttacked = BB_SQ_C1 | BB_SQ_D1 | BB_SQ_E1
-	WhiteKingSideCastleFree         = BB_SQ_F1 | BB_SQ_G1
-	WhiteKingSideCastleNotAttacked  = BB_SQ_E1 | BB_SQ_F1 | BB_SQ_G1
+	whiteQueenSideCastleFree        = BB_SQ_B1 | BB_SQ_C1 | BB_SQ_D1
+	whiteQueenSideCastleNotAttacked = BB_SQ_C1 | BB_SQ_D1 | BB_SQ_E1
+	whiteKingSideCastleFree         = BB_SQ_F1 | BB_SQ_G1
+	whiteKingSideCastleNotAttacked  = BB_SQ_E1 | BB_SQ_F1 | BB_SQ_G1
 
-	BlackQueenSideCastleFree        = BB_SQ_B8 | BB_SQ_C8 | BB_SQ_D8
-	BlackQueenSideCastleNotAttacked = BB_SQ_C8 | BB_SQ_D8 | BB_SQ_E8
-	BlackKingSideCastleFree         = BB_SQ_F8 | BB_SQ_G8
-	BlackKingSideCastleNotAttacked  = BB_SQ_E8 | BB_SQ_F8 | BB_SQ_G8
+	blackQueenSideCastleFree        = BB_SQ_B8 | BB_SQ_C8 | BB_SQ_D8
+	blackQueenSideCastleNotAttacked = BB_SQ_C8 | BB_SQ_D8 | BB_SQ_E8
+	blackKingSideCastleFree         = BB_SQ_F8 | BB_SQ_G8
+	blackKingSideCastleNotAttacked  = BB_SQ_E8 | BB_SQ_F8 | BB_SQ_G8
 )
 
+// checkersPinsAndMask accumulates the check and pin state of the active
+// king, computed once per position by checkersAndPinned before dispatching
+// to the per-piece generators.
 type checkersPinsAndMask struct {
+	// diagonalPins is the union of rays along which an active-color piece is
+	// pinned diagonally against its king by an enemy bishop or queen.
+	// A piece on this mask may only move along the ray itself.
 	diagonalPins Bitboard
+
+	// straightPins is the union of rays along which an active-color piece is
+	// pinned on a rank or file against its king by an enemy rook or queen.
+	// A piece on this mask may only move along the ray itself.
 	straightPins Bitboard
-	moveMask     Bitboard
+
+	// moveMask restricts the destination squares of all non-king pieces.
+	// When not in check it equals EnemiesOrEmpty (all moves allowed).
+	// When in check by one piece it is the union of the checker's square and
+	// the ray between checker and king, so a legal response must either
+	// capture the checker or interpose on the ray.
+	moveMask Bitboard
 }
 
+// LegalMoves appends all legal moves for the active color in position p to
+// moves and returns the updated slice. The second return value reports
+// whether the active king is currently in check.
+//
+// Double check restricts generation to king moves only. A single check
+// restricts all other pieces via moveMask. When not in check, moveMask
+// is set to EnemiesOrEmpty and all piece generators run.
 func LegalMoves(moves []Move, p *Position) ([]Move, bool) {
 	cpm := checkersPinsAndMask{}
 	numCheckers := checkersAndPinned(p, &cpm)
@@ -47,6 +75,17 @@ func LegalMoves(moves []Move, p *Position) ([]Move, bool) {
 	return moves, inCheck
 }
 
+// checkersAndPinned computes checkers, pinned pieces, and the move mask for
+// the active king and stores the results in cpm. It returns the number of
+// pieces currently giving check (0, 1, or 2).
+//
+// Knight and pawn checkers are found with direct attack-table lookups.
+// Sliding checkers are found by tracing diagonal and straight rays outward
+// from the king and intersecting with enemy sliders:
+//   - A ray with no intervening friendly piece is a direct check; the
+//     checker's square and the ray are added to moveMask.
+//   - A ray with exactly one intervening friendly piece is a pin; the ray
+//     is added to diagonalPins or straightPins accordingly.
 func checkersAndPinned(p *Position, cpm *checkersPinsAndMask) int {
 	us := p.Active()
 	king := p.King()
@@ -106,9 +145,10 @@ func checkersAndPinned(p *Position, cpm *checkersPinsAndMask) int {
 	return checkers.OnesCount()
 }
 
+// genPawnsAttacks returns a Bitboard of all squares attacked by the inactive
+// color's pawns. The active king must not step onto these squares.
 func genPawnsAttacks(p *Position) Bitboard {
 	pawns := p.EnemyPawns()
-	//config := pawnConfig[us]
 	color := p.Inactive()
 	leftAttacks := 16*int(color) - 9
 	rightAttacks := 16*int(color) - 7
@@ -117,6 +157,8 @@ func genPawnsAttacks(p *Position) Bitboard {
 	return left | right
 }
 
+// genKnightsAttacks returns a Bitboard of all squares attacked by the
+// inactive color's knights. The active king must not step onto these squares.
 func genKnightsAttacks(p *Position) Bitboard {
 	var attacks Bitboard
 
@@ -132,6 +174,9 @@ func genKnightsAttacks(p *Position) Bitboard {
 	return attacks
 }
 
+// genDiagonalAttacks returns a Bitboard of all squares attacked diagonally
+// by the inactive color's bishops and queens. The active king is removed from
+// the occupancy so it cannot block its own escape squares.
 func genDiagonalAttacks(p *Position) Bitboard {
 	var attacks Bitboard
 
@@ -148,6 +193,8 @@ func genDiagonalAttacks(p *Position) Bitboard {
 	return attacks
 }
 
+// genBishopAttacks returns the set of squares a bishop on sq attacks given
+// the provided occupancy, using magic bitboard lookup.
 func genBishopAttacks(sq Square, occupied Bitboard) Bitboard {
 
 	occupied &= BishopMagic[sq].Mask
@@ -156,6 +203,9 @@ func genBishopAttacks(sq Square, occupied Bitboard) Bitboard {
 	return BishopMagic[sq].Attacks[occupied]
 }
 
+// genStraightAttacks returns a Bitboard of all squares attacked along ranks
+// and files by the inactive color's rooks and queens. The active king is
+// removed from the occupancy so it cannot block its own escape squares.
 func genStraightAttacks(p *Position) Bitboard {
 	var attacks Bitboard
 
@@ -172,20 +222,28 @@ func genStraightAttacks(p *Position) Bitboard {
 	return attacks
 }
 
+// genRookAttacks returns the set of squares a rook on sq attacks given the
+// provided occupancy, using magic bitboard lookup.
 func genRookAttacks(sq Square, occupied Bitboard) Bitboard {
-	//m := RookMagic[sq]
 	occupied &= RookMagic[sq].Mask
 	occupied *= RookMagic[sq].Magic
 	occupied >>= RookMagic[sq].Shift
 	return RookMagic[sq].Attacks[occupied]
 }
 
+// genKingAttacks returns a Bitboard of all squares attacked by the inactive
+// color's king. Used to prevent the active king moving adjacent to the enemy
+// king.
 func genKingAttacks(p *Position) Bitboard {
 	king := p.EnemyKing()
 	sq, _ := king.PopLSB()
 	return kingMoves[sq]
 }
 
+// genPawnForwardMoves appends all legal pawn push moves (single and double)
+// for the active color. Diagonally pinned pawns cannot push. Straight-pinned
+// pawns may only push along their pin ray. Pushes to the back rank are
+// expanded into all four promotion piece types.
 func genPawnForwardMoves(moves []Move, p *Position, cpm checkersPinsAndMask) []Move {
 	us := p.Active()
 	singlePushes := -8 + 16*int(us)
@@ -226,6 +284,11 @@ func genPawnForwardMoves(moves []Move, p *Position, cpm checkersPinsAndMask) []M
 	return moves
 }
 
+// genPawnLeftAttackMoves appends all legal pawn left-diagonal capture moves
+// for the active color. "Left" is toward the a-file for White, toward the
+// h-file for Black. Straight-pinned pawns cannot capture. Diagonally pinned
+// pawns may only capture along their pin ray. Captures on the back rank are
+// expanded into all four promotion piece types.
 func genPawnLeftAttackMoves(moves []Move, p *Position, cpm checkersPinsAndMask) []Move {
 	us := p.Active()
 	leftAttacks := 16*int(us) - 9
@@ -256,6 +319,11 @@ func genPawnLeftAttackMoves(moves []Move, p *Position, cpm checkersPinsAndMask) 
 	return moves
 }
 
+// genPawnRightAttackMoves appends all legal pawn right-diagonal capture moves
+// for the active color. "Right" is toward the h-file for White, toward the
+// a-file for Black. Straight-pinned pawns cannot capture. Diagonally pinned
+// pawns may only capture along their pin ray. Captures on the back rank are
+// expanded into all four promotion piece types.
 func genPawnRightAttackMoves(moves []Move, p *Position, cpm checkersPinsAndMask) []Move {
 	us := p.Active()
 	rightAttacks := 16*int(us) - 7
@@ -286,6 +354,11 @@ func genPawnRightAttackMoves(moves []Move, p *Position, cpm checkersPinsAndMask)
 	return moves
 }
 
+// genPawnEnPassantMoves appends any legal en passant capture moves. Pinned
+// pawns are excluded. The horizontal-pin edge case is handled explicitly: after
+// removing both the capturing and the captured pawn from the occupancy, the
+// king's rank is re-checked for rook or queen attacks to ensure the capture
+// does not expose the king.
 func genPawnEnPassantMoves(moves []Move, p *Position, cpm checkersPinsAndMask) []Move {
 	const enPassantRanks = Rank_5 | Rank_4
 	us := p.Active()
@@ -325,6 +398,9 @@ func genPawnEnPassantMoves(moves []Move, p *Position, cpm checkersPinsAndMask) [
 	return moves
 }
 
+// genKnightMoves appends all legal knight moves for the active color. Knights
+// that are pinned (diagonally or straight) cannot move and are excluded
+// entirely.
 func genKnightMoves(moves []Move, p *Position, cpm checkersPinsAndMask) []Move {
 	knights := p.Knights() &^ (cpm.diagonalPins | cpm.straightPins)
 	var from, to Square
@@ -342,6 +418,9 @@ func genKnightMoves(moves []Move, p *Position, cpm checkersPinsAndMask) []Move {
 	return moves
 }
 
+// genBishopMoves appends all legal bishop moves for the active color.
+// Straight-pinned bishops cannot move. Diagonally pinned bishops may only
+// move along their pin ray.
 func genBishopMoves(moves []Move, p *Position, cpm checkersPinsAndMask) []Move {
 	bishops := p.Bishops() &^ cpm.straightPins
 
@@ -369,6 +448,9 @@ func genBishopMoves(moves []Move, p *Position, cpm checkersPinsAndMask) []Move {
 	return moves
 }
 
+// genRookMoves appends all legal rook moves for the active color.
+// Diagonally pinned rooks cannot move. Straight-pinned rooks may only move
+// along their pin ray.
 func genRookMoves(moves []Move, p *Position, cpm checkersPinsAndMask) []Move {
 	rooks := p.Rooks() &^ cpm.diagonalPins
 
@@ -396,9 +478,11 @@ func genRookMoves(moves []Move, p *Position, cpm checkersPinsAndMask) []Move {
 	return moves
 }
 
+// genQueenMoves appends all legal queen moves for the active color. Pinned
+// queens are restricted to their respective pin ray (diagonal or straight).
+// Unpinned queens combine both bishop and rook attack sets.
 func genQueenMoves(moves []Move, p *Position, cpm checkersPinsAndMask) []Move {
 	queens := p.Queens()
-	//enemiesOrEmpty := ^p.AllPieces[us] & cpm.moveMask
 	occupied := p.Occupied()
 
 	var from, to Square
@@ -435,6 +519,10 @@ func genQueenMoves(moves []Move, p *Position, cpm checkersPinsAndMask) []Move {
 	return moves
 }
 
+// genKingMoves appends all legal king moves including castling for the active
+// color. The full enemy attack map is computed and subtracted from candidate
+// targets. Castling is only added when the rights flag is set, the path is
+// unoccupied, and no square the king crosses is under attack.
 func genKingMoves(moves []Move, p *Position) []Move {
 	us := p.Active()
 	king := p.King()
@@ -459,28 +547,28 @@ func genKingMoves(moves []Move, p *Position) []Move {
 	// castling
 	if us == White {
 		if p.CanWhiteCastleKingSide() &&
-			WhiteKingSideCastleFree&p.Occupied() == 0 &&
-			WhiteKingSideCastleNotAttacked&attacked == 0 {
+			whiteKingSideCastleFree&p.Occupied() == 0 &&
+			whiteKingSideCastleNotAttacked&attacked == 0 {
 			moves = append(moves, NewMove(SQ_E1, SQ_G1))
 		}
 
 		if p.CanWhiteCastleQueenSide() &&
-			WhiteQueenSideCastleFree&p.Occupied() == 0 &&
-			WhiteQueenSideCastleNotAttacked&attacked == 0 {
+			whiteQueenSideCastleFree&p.Occupied() == 0 &&
+			whiteQueenSideCastleNotAttacked&attacked == 0 {
 			moves = append(moves, NewMove(SQ_E1, SQ_C1))
 		}
 	}
 
 	if us == Black {
 		if p.CanBlackCastleKingSide() &&
-			BlackKingSideCastleFree&p.Occupied() == 0 &&
-			BlackKingSideCastleNotAttacked&attacked == 0 {
+			blackKingSideCastleFree&p.Occupied() == 0 &&
+			blackKingSideCastleNotAttacked&attacked == 0 {
 			moves = append(moves, NewMove(SQ_E8, SQ_G8))
 		}
 
 		if p.CanBlackCastleQueenSide() &&
-			BlackQueenSideCastleFree&p.Occupied() == 0 &&
-			BlackQueenSideCastleNotAttacked&attacked == 0 {
+			blackQueenSideCastleFree&p.Occupied() == 0 &&
+			blackQueenSideCastleNotAttacked&attacked == 0 {
 			moves = append(moves, NewMove(SQ_E8, SQ_C8))
 		}
 	}
@@ -488,6 +576,9 @@ func genKingMoves(moves []Move, p *Position) []Move {
 	return moves
 }
 
+// attacks returns a Bitboard of every square attacked by at least one piece
+// of the inactive color. Used by genKingMoves to determine safe king
+// destinations.
 func attacks(p *Position) Bitboard {
 	return genPawnsAttacks(p) |
 		genKnightsAttacks(p) |

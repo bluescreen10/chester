@@ -6,8 +6,15 @@ import (
 	"strings"
 )
 
+// Bitboard is a 64-bit mask representing a set of squares. Each bit
+// corresponds to one square using the same index as Square: bit 0 = a8,
+// bit 63 = h1. Multiple bits may be set to represent a set of squares,
+// such as all squares occupied by white pawns.
 type Bitboard uint64
 
+// Single-square Bitboard constants for the first and eighth ranks.
+// Named BB_SQ_<file><rank>, e.g. BB_SQ_E1 has only the e1 bit set.
+// Used as masks in castling legality checks and rights updates.
 const (
 	BB_SQ_A1 Bitboard = 1 << SQ_A1
 	BB_SQ_B1 Bitboard = 1 << SQ_B1
@@ -28,6 +35,8 @@ const (
 	BB_SQ_H8 Bitboard = 1 << SQ_H8
 )
 
+// String returns a human-readable ASCII grid of the bitboard with rank
+// numbers and file letters. Set bits are shown as X, clear bits as spaces.
 func (b Bitboard) String() string {
 	builder := strings.Builder{}
 
@@ -50,29 +59,32 @@ func (b Bitboard) String() string {
 	return builder.String()
 }
 
+// PopLSB removes the least significant set bit and returns its Square index
+// together with the modified Bitboard. Typical usage:
+//
+//	for bb != 0 {
+//	    sq, bb = bb.PopLSB()
+//	    // process sq
+//	}
 func (b Bitboard) PopLSB() (Square, Bitboard) {
 	s := Square(bits.TrailingZeros64(uint64(b)))
 	b &= b - 1
 	return s, b
 }
 
+// OnesCount returns the number of set bits (population count).
 func (b Bitboard) OnesCount() int {
 	return bits.OnesCount64(uint64(b))
 }
 
+// RotateLeft rotates all 64 bits left by offset positions. Negative values
+// rotate right. Used to shift pawn attack and push masks without branching
+// on color: a positive offset for Black and a negative offset for White.
 func (b Bitboard) RotateLeft(offset int) Bitboard {
 	return Bitboard(bits.RotateLeft64(uint64(b), offset))
 }
 
-func (b Bitboard) Square() Square {
-	if b == 0 {
-		return SQ_NULL
-	}
-
-	sq := bits.TrailingZeros64(uint64(b))
-	return Square(sq)
-}
-
+// NewBitboardFromSquare returns a Bitboard with only the bit for sq set.
 func NewBitboardFromSquare(sq Square) Bitboard {
 	return 1 << sq
 }

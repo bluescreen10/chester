@@ -1,10 +1,33 @@
 package chester
 
+// MoveCount pairs a root move with the number of leaf nodes reachable from it
+// at the requested depth. It is the element type of the channel returned by
+// Perft.
 type MoveCount struct {
 	Move  Move
 	Count int
 }
 
+// Perft performs a performance test (perft) from position p to the given
+// depth and returns a channel of MoveCount values, one per legal move in p.
+// Each value carries the root move and the total number of leaf nodes
+// reachable from it at the given depth.
+//
+// The traversal runs in a separate goroutine; the channel is closed when all
+// root moves have been processed. Callers can sum the counts to obtain the
+// total node count, or print them individually for move-by-move debugging
+// against a reference engine such as Stockfish.
+//
+// Depth 1 returns one MoveCount per legal move, each with Count == 1.
+//
+// Example:
+//
+//	var total int
+//	for mc := range chester.Perft(pos, 5) {
+//	    fmt.Printf("%s: %d\n", mc.Move, mc.Count)
+//	    total += mc.Count
+//	}
+//	fmt.Printf("total: %d\n", total)
 func Perft(p *Position, depth int) <-chan MoveCount {
 	ch := make(chan MoveCount, 2)
 
@@ -32,6 +55,10 @@ func Perft(p *Position, depth int) <-chan MoveCount {
 	return ch
 }
 
+// perft is the recursive inner implementation used by Perft. It reuses the
+// tail of the provided moves slice as scratch space for each child position,
+// avoiding allocations deeper in the tree. Bulk counting (returning
+// len(moves) at depth 1 without recursing) keeps the leaf level fast.
 func perft(p *Position, moves []Move, depth int) int {
 	moves, _ = LegalMoves(moves, p)
 
