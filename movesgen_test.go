@@ -653,12 +653,12 @@ func formatError(pos chester.Position, got, expected []string) string {
 	moveDiff := diff(expected, got)
 	return fmt.Sprintf(
 		"Legal moves generation failed\n"+
-			"Fen: %s\n"+
+			"FEN: %s\n"+
 			"Got(%d):  %s\n"+
 			"Want(%d): %s\n"+
 			"Diff: %s\n"+
 			"Position:\n%s\n",
-		pos.Fen(), len(got), got, len(expected), expected, moveDiff, pos)
+		pos.FEN(), len(got), got, len(expected), expected, moveDiff, pos)
 }
 
 func diff(expected, got []string) []string {

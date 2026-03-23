@@ -167,7 +167,7 @@ func ParseFEN(fen string) (Position, error) {
 	return pos, nil
 }
 
-func (p Position) Fen() string {
+func (p Position) FEN() string {
 	fen := strings.Builder{}
 
 	for bit := Bitboard(1); bit != 0; bit <<= 1 {
@@ -335,6 +335,18 @@ func (p *Position) Do(m Move) {
 	isCapture := captured != Empty
 	diff := int(to) - int(from)
 
+	if enPassantTarget != SQ_NULL {
+		var pawnSq Square
+		if p.active == White {
+			pawnSq = enPassantTarget + 8 // black pawn moved to higher index
+		} else {
+			pawnSq = enPassantTarget - 8 // white pawn moved to lower index
+		}
+		if p.adjacentPawns(p.active, pawnSq) {
+			p.hash ^= polyglotTable.EnPassant[enPassantTarget.File()]
+		}
+	}
+
 	if isCapture {
 		p.halfMoves = 0
 		p.remove(captured, p.inactive, to)
@@ -342,6 +354,10 @@ func (p *Position) Do(m Move) {
 			p.updateCastlingRights(to)
 		}
 	}
+
+	// if enPassantTarget != SQ_NULL {
+	// 	p.hash ^= polyglotTable.EnPassant[enPassantTarget.File()]
+	// }
 
 	switch piece {
 	case Pawn:
@@ -359,9 +375,9 @@ func (p *Position) Do(m Move) {
 			}
 		case diff == 16 || diff == -16:
 			p.move(Pawn, p.active, from, to)
-			toBB := Bitboard(1) << to
-			if p.EnemyPawns()&(toBB<<1|toBB>>1) != 0 {
-				p.enPassantTarget = (to + from) >> 1
+			p.enPassantTarget = (to + from) >> 1
+			if p.adjacentPawns(p.inactive, to) {
+				p.hash ^= polyglotTable.EnPassant[p.enPassantTarget.File()]
 			}
 		default:
 			p.move(Pawn, p.active, from, to)
@@ -392,12 +408,20 @@ func (p *Position) Do(m Move) {
 		}
 	}
 
+	p.hash ^= polyglotTable.WhiteToMove
 	p.fullMoves += uint16(p.active)
 	p.active, p.inactive = p.inactive, p.active
 }
 
+func (p *Position) adjacentPawns(color Color, sq Square) bool {
+	pawns := p.pieces[Pawn] & p.allPieces[color]
+	bb := NewBitboardFromSquare(sq)
+	return bb&((pawns&File_Not_H)<<1|(pawns&File_Not_A)>>1) != 0
+}
+
 func (p *Position) updateCastlingRights(sq Square) {
 	fromTo := NewBitboardFromSquare(sq)
+	p.hash ^= polyglotTable.Castling[p.castlingRights]
 	p.castlingRights &^= whiteKingSideCastle * castlingRights((fromTo&BB_SQ_H1)>>SQ_H1)
 	p.castlingRights &^= (whiteKingSideCastle | whiteQueenSideCastle) * castlingRights((fromTo&BB_SQ_E1)>>SQ_E1)
 	p.castlingRights &^= whiteQueenSideCastle * castlingRights((fromTo&BB_SQ_A1)>>SQ_A1)
@@ -405,15 +429,17 @@ func (p *Position) updateCastlingRights(sq Square) {
 	p.castlingRights &^= blackKingSideCastle * castlingRights((fromTo&BB_SQ_H8)>>SQ_H8)
 	p.castlingRights &^= (blackKingSideCastle | blackQueenSideCastle) * castlingRights((fromTo&BB_SQ_E8)>>SQ_E8)
 	p.castlingRights &^= blackQueenSideCastle * castlingRights((fromTo&BB_SQ_A8)>>SQ_A8)
+	p.hash ^= polyglotTable.Castling[p.castlingRights]
 }
 
 func (p *Position) move(piece Piece, color Color, from, to Square) {
-
 	p.mailbox[from] = Empty
 	p.mailbox[to] = piece
 	fromAndTo := NewBitboardFromSquare(from) | NewBitboardFromSquare(to)
 	p.allPieces[color] ^= fromAndTo
 	p.pieces[piece] ^= fromAndTo
+	p.hash ^= polyglotTable.Pieces[color][piece][from]
+	p.hash ^= polyglotTable.Pieces[color][piece][to]
 }
 
 func (p *Position) put(piece Piece, color Color, sq Square) {
@@ -422,6 +448,7 @@ func (p *Position) put(piece Piece, color Color, sq Square) {
 	bb := NewBitboardFromSquare(sq)
 	p.allPieces[color] |= bb
 	p.pieces[piece] |= bb
+	p.hash ^= polyglotTable.Pieces[color][piece][sq]
 }
 
 func (p *Position) remove(piece Piece, color Color, sq Square) {
@@ -430,6 +457,7 @@ func (p *Position) remove(piece Piece, color Color, sq Square) {
 	bb := NewBitboardFromSquare(sq)
 	p.allPieces[color] &^= bb
 	p.pieces[piece] &^= bb
+	p.hash ^= polyglotTable.Pieces[color][piece][sq]
 }
 
 func (p *Position) Get(sq Square) Piece {
@@ -578,24 +606,10 @@ func computeHash(p *Position) uint64 {
 		}
 	}
 
-	if p.CanWhiteCastleKingSide() {
-		hash ^= polyglotTable.Castling[0]
-	}
+	hash ^= polyglotTable.Castling[p.castlingRights]
 
-	if p.CanWhiteCastleQueenSide() {
-		hash ^= polyglotTable.Castling[1]
-	}
-
-	if p.CanBlackCastleKingSide() {
-		hash ^= polyglotTable.Castling[2]
-	}
-
-	if p.CanBlackCastleQueenSide() {
-		hash ^= polyglotTable.Castling[3]
-	}
-
-	if sq := p.EnPassantTarget(); sq != SQ_NULL {
-		file := sq.File()
+	if p.enPassantTarget != SQ_NULL && p.adjacentPawns(p.active, p.enPassantTarget) {
+		file := p.enPassantTarget.File()
 		hash ^= polyglotTable.EnPassant[file]
 	}
 

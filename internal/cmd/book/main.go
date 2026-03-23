@@ -276,7 +276,7 @@ func generatePreamble(w io.Writer, file string) {
 func generateRandoms(w io.Writer) {
 	fmt.Fprintf(w, "type polyglotRandoms struct {\n")
 	fmt.Fprintf(w, "\tPieces      [Color(2)][Piece(6)][Square(64)]uint64\n")
-	fmt.Fprintf(w, "\tCastling    [4]uint64\n")
+	fmt.Fprintf(w, "\tCastling    [16]uint64\n")
 	fmt.Fprintf(w, "\tEnPassant   [8]uint64\n")
 	fmt.Fprintf(w, "\tWhiteToMove uint64\n")
 	fmt.Fprintf(w, "}\n")
@@ -304,9 +304,25 @@ func generateRandoms(w io.Writer) {
 	fmt.Fprintf(w, "\t},\n")
 
 	// castling
-	fmt.Fprintf(w, "\tCastling: [4]uint64{\n")
-	for i := range 4 {
-		fmt.Fprintf(w, "\t\t0x%x,\n", random[768+i])
+	fmt.Fprintf(w, "\tCastling: [16]uint64{\n")
+	for i := range 16 {
+		var hash uint64
+		if i&0b0001 != 0 {
+			hash ^= random[768]
+		}
+
+		if i&0b0010 != 0 {
+			hash ^= random[768+1]
+		}
+
+		if i&0b0100 != 0 {
+			hash ^= random[768+2]
+		}
+
+		if i&0b1000 != 0 {
+			hash ^= random[768+3]
+		}
+		fmt.Fprintf(w, "\t\t0x%x,\n", hash)
 	}
 	fmt.Fprintf(w, "\t},\n")
 
