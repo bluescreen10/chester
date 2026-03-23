@@ -65,11 +65,12 @@ func (b Bitboard) RotateLeft(offset int) Bitboard {
 }
 
 func (b Bitboard) Square() Square {
-	if sq := bits.TrailingZeros64(uint64(b)); sq != 0 {
-		return Square(sq)
+	if b == 0 {
+		return SQ_NULL
 	}
 
-	return SQ_NULL
+	sq := bits.TrailingZeros64(uint64(b))
+	return Square(sq)
 }
 
 func NewBitboardFromSquare(sq Square) Bitboard {

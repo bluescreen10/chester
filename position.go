@@ -38,8 +38,9 @@ type Position struct {
 	pieces    [Piece(6)]Bitboard
 	allPieces [Color(2)]Bitboard
 
-	//Zobrist hash
 	hash uint64
+
+	mailbox [64]Piece
 
 	enPassantTarget Square
 
@@ -58,58 +59,74 @@ func ParseFEN(fen string) (Position, error) {
 		return pos, fmt.Errorf("invalid fen: %s", fen)
 	}
 
+	for i := range 64 {
+		pos.mailbox[i] = Empty
+	}
+
 	bit := Bitboard(1)
+	sq := Square(0)
 
 	for _, row := range strings.Split(parts[0], "/") {
 		for _, char := range row {
 			switch char {
 			case 'P':
+				pos.mailbox[sq] = Pawn
 				pos.pieces[Pawn] |= bit
 				pos.allPieces[White] |= bit
 			case 'N':
+				pos.mailbox[sq] = Knight
 				pos.pieces[Knight] |= bit
 				pos.allPieces[White] |= bit
 			case 'B':
+				pos.mailbox[sq] = Bishop
 				pos.pieces[Bishop] |= bit
 				pos.allPieces[White] |= bit
 			case 'R':
+				pos.mailbox[sq] = Rook
 				pos.pieces[Rook] |= bit
 				pos.allPieces[White] |= bit
 			case 'Q':
+				pos.mailbox[sq] = Queen
 				pos.pieces[Queen] |= bit
 				pos.allPieces[White] |= bit
 			case 'K':
+				pos.mailbox[sq] = King
 				pos.pieces[King] |= bit
 				pos.allPieces[White] |= bit
 			case 'p':
+				pos.mailbox[sq] = Pawn
 				pos.pieces[Pawn] |= bit
 				pos.allPieces[Black] |= bit
 			case 'n':
+				pos.mailbox[sq] = Knight
 				pos.pieces[Knight] |= bit
 				pos.allPieces[Black] |= bit
 			case 'b':
+				pos.mailbox[sq] = Bishop
 				pos.pieces[Bishop] |= bit
 				pos.allPieces[Black] |= bit
 			case 'r':
+				pos.mailbox[sq] = Rook
 				pos.pieces[Rook] |= bit
 				pos.allPieces[Black] |= bit
 			case 'q':
+				pos.mailbox[sq] = Queen
 				pos.pieces[Queen] |= bit
 				pos.allPieces[Black] |= bit
 			case 'k':
+				pos.mailbox[sq] = King
 				pos.pieces[King] |= bit
 				pos.allPieces[Black] |= bit
 			case '1', '2', '3', '4', '5', '6', '7', '8':
 				bit <<= uint(char - '1')
+				sq += Square(char - '1')
 			default:
 				return Position{}, fmt.Errorf("invalid piece: %c", char)
 			}
 			bit <<= 1
+			sq++
 		}
 	}
-
-	// pos.State = statePool.Get().(*State)
-	// pos.State.Reset()
 
 	if parts[1] == "w" || parts[1] == "W" {
 		pos.active = White
@@ -308,34 +325,21 @@ func (p *Position) Occupied() Bitboard {
 func (p *Position) Do(m Move) {
 	from := m.From()
 	to := m.To()
-	fromBB := Bitboard(1) << from
-	toBB := Bitboard(1) << to
-	isCapture := p.Enemies()&toBB != 0
+
 	enPassantTarget := p.enPassantTarget
 	p.enPassantTarget = SQ_NULL
 	p.halfMoves++
 
+	piece := p.mailbox[from]
+	captured := p.mailbox[to]
+	isCapture := captured != Empty
 	diff := int(to) - int(from)
-
-	//Note: maybe implementing a mailbox can help here
-	var piece Piece
-	for i, p := range p.pieces {
-		if fromBB&p != 0 {
-			piece = Piece(i)
-			break
-		}
-	}
 
 	if isCapture {
 		p.halfMoves = 0
-		for i, bb := range p.pieces {
-			if toBB&bb != 0 {
-				p.remove(Piece(i), p.inactive, toBB)
-				if Piece(i) == Rook {
-					p.updateCastlingRights(toBB)
-				}
-				break
-			}
+		p.remove(captured, p.inactive, to)
+		if captured == Rook {
+			p.updateCastlingRights(to)
 		}
 	}
 
@@ -344,46 +348,47 @@ func (p *Position) Do(m Move) {
 		p.halfMoves = 0
 		switch {
 		case m.IsPromotion():
-			p.remove(Pawn, p.active, fromBB)
-			p.put(m.PromoPiece(), p.active, toBB)
+			p.remove(Pawn, p.active, from)
+			p.put(m.PromoPiece(), p.active, to)
 		case to == enPassantTarget:
-			p.move(Pawn, p.active, fromBB, toBB)
+			p.move(Pawn, p.active, from, to)
 			if p.active == White {
-				p.remove(Pawn, p.inactive, toBB<<8)
+				p.remove(Pawn, p.inactive, to+8)
 			} else {
-				p.remove(Pawn, p.inactive, toBB>>8)
+				p.remove(Pawn, p.inactive, to-8)
 			}
 		case diff == 16 || diff == -16:
-			p.move(Pawn, p.active, fromBB, toBB)
+			p.move(Pawn, p.active, from, to)
+			toBB := Bitboard(1) << to
 			if p.EnemyPawns()&(toBB<<1|toBB>>1) != 0 {
 				p.enPassantTarget = (to + from) >> 1
 			}
 		default:
-			p.move(Pawn, p.active, fromBB, toBB)
+			p.move(Pawn, p.active, from, to)
 		}
 	case King:
-		p.move(King, p.active, fromBB, toBB)
-		p.updateCastlingRights(fromBB)
+		p.move(King, p.active, from, to)
+		p.updateCastlingRights(from)
 
 		switch diff {
 		case 2:
 			if p.active == White {
-				p.move(Rook, White, BB_SQ_H1, BB_SQ_F1)
+				p.move(Rook, White, SQ_H1, SQ_F1)
 			} else {
-				p.move(Rook, Black, BB_SQ_H8, BB_SQ_F8)
+				p.move(Rook, Black, SQ_H8, SQ_F8)
 			}
 		case -2:
 			if p.active == White {
-				p.move(Rook, White, BB_SQ_A1, BB_SQ_D1)
+				p.move(Rook, White, SQ_A1, SQ_D1)
 			} else {
-				p.move(Rook, Black, BB_SQ_A8, BB_SQ_D8)
+				p.move(Rook, Black, SQ_A8, SQ_D8)
 			}
 		}
 
 	default:
-		p.move(piece, p.active, fromBB, toBB)
+		p.move(piece, p.active, from, to)
 		if piece == Rook {
-			p.updateCastlingRights(fromBB)
+			p.updateCastlingRights(from)
 		}
 	}
 
@@ -391,7 +396,8 @@ func (p *Position) Do(m Move) {
 	p.active, p.inactive = p.inactive, p.active
 }
 
-func (p *Position) updateCastlingRights(fromTo Bitboard) {
+func (p *Position) updateCastlingRights(sq Square) {
+	fromTo := NewBitboardFromSquare(sq)
 	p.castlingRights &^= whiteKingSideCastle * castlingRights((fromTo&BB_SQ_H1)>>SQ_H1)
 	p.castlingRights &^= (whiteKingSideCastle | whiteQueenSideCastle) * castlingRights((fromTo&BB_SQ_E1)>>SQ_E1)
 	p.castlingRights &^= whiteQueenSideCastle * castlingRights((fromTo&BB_SQ_A1)>>SQ_A1)
@@ -401,41 +407,33 @@ func (p *Position) updateCastlingRights(fromTo Bitboard) {
 	p.castlingRights &^= blackQueenSideCastle * castlingRights((fromTo&BB_SQ_A8)>>SQ_A8)
 }
 
-//func (p *Position) Undo () {}
+func (p *Position) move(piece Piece, color Color, from, to Square) {
 
-func (p *Position) move(piece Piece, color Color, from, to Bitboard) {
-	fromAndTo := from | to
+	p.mailbox[from] = Empty
+	p.mailbox[to] = piece
+	fromAndTo := NewBitboardFromSquare(from) | NewBitboardFromSquare(to)
 	p.allPieces[color] ^= fromAndTo
 	p.pieces[piece] ^= fromAndTo
 }
 
-func (p *Position) put(piece Piece, color Color, sq Bitboard) {
-	p.allPieces[color] |= sq
-	p.pieces[piece] |= sq
+func (p *Position) put(piece Piece, color Color, sq Square) {
+	p.mailbox[sq] = piece
+
+	bb := NewBitboardFromSquare(sq)
+	p.allPieces[color] |= bb
+	p.pieces[piece] |= bb
 }
 
-func (p *Position) remove(piece Piece, color Color, sq Bitboard) {
-	p.allPieces[color] &^= sq
-	p.pieces[piece] &^= sq
+func (p *Position) remove(piece Piece, color Color, sq Square) {
+	p.mailbox[sq] = Empty
+
+	bb := NewBitboardFromSquare(sq)
+	p.allPieces[color] &^= bb
+	p.pieces[piece] &^= bb
 }
 
 func (p *Position) Get(sq Square) Piece {
-	bit := Bitboard(1) << sq
-
-	if p.allPieces[p.active]&p.pieces[Pawn]&bit != 0 {
-		return Pawn
-	} else if p.allPieces[p.active]&p.pieces[Knight]&bit != 0 {
-		return Knight
-	} else if p.allPieces[p.active]&p.pieces[Bishop]&bit != 0 {
-		return Bishop
-	} else if p.allPieces[p.active]&p.pieces[Rook]&bit != 0 {
-		return Rook
-	} else if p.allPieces[p.active]&p.pieces[Queen]&bit != 0 {
-		return Queen
-	} else if p.allPieces[p.active]&p.pieces[King]&bit != 0 {
-		return King
-	}
-	return Empty
+	return p.mailbox[sq]
 }
 
 func (p *Position) Pawns() Bitboard {
@@ -596,7 +594,6 @@ func computeHash(p *Position) uint64 {
 		hash ^= polyglotTable.Castling[3]
 	}
 
-	//FIXME: only if they are actually adjancent pawns
 	if sq := p.EnPassantTarget(); sq != SQ_NULL {
 		file := sq.File()
 		hash ^= polyglotTable.EnPassant[file]
