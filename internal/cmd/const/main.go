@@ -359,7 +359,7 @@ func genMagicnumbers(w io.Writer) {
 
 	rays := calculateRays()
 
-	fmt.Fprintf(w, "var RookMagic [64]Magic = [64]Magic{")
+	fmt.Fprintf(w, "var rookMagic [64]Magic = [64]Magic{")
 	for sq := range 64 {
 		rank, file := sqaureToRankAndFile(sq)
 		mask := (rays[North][sq] | rays[South][sq] | rays[East][sq] | rays[West][sq])
@@ -389,7 +389,7 @@ func genMagicnumbers(w io.Writer) {
 	}
 	fmt.Fprintf(w, "};\n")
 
-	fmt.Fprintf(w, "var BishopMagic [64]Magic = [64]Magic{")
+	fmt.Fprintf(w, "var bishopMagic [64]Magic = [64]Magic{")
 	for sq := range 64 {
 		rank, file := sqaureToRankAndFile(sq)
 		mask := (rays[NorthEast][sq] | rays[SouthEast][sq] | rays[SouthWest][sq] | rays[NorthWest][sq])

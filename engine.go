@@ -31,7 +31,7 @@ func SearchBestMove(ctx context.Context, p *Position) chan Evaluation {
 	go func() {
 		defer close(ch)
 
-		if entries, ok := Book[p.hash]; ok {
+		if entries, ok := book[p.hash]; ok {
 			move := pickMove(entries)
 			ch <- Evaluation{
 				Depth: 1,
@@ -168,7 +168,7 @@ func fmin(a, b int) int {
 // pickMove selects a move from a set of book entries using weighted random
 // selection. Entries with higher Weight are chosen proportionally more often.
 // If all weights are zero, a move is chosen uniformly at random.
-func pickMove(entries []BookEntry) Move {
+func pickMove(entries []bookEntry) Move {
 	var total int
 	for _, m := range entries {
 		total += int(m.Weight)

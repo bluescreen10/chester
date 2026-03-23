@@ -4595,7 +4595,7 @@ type Magic struct {
 	Shift   uint8
 }
 
-var RookMagic [64]Magic = [64]Magic{
+var rookMagic [64]Magic = [64]Magic{
 	{[]Bitboard{
 		72340172838076926,
 		510,
@@ -107188,7 +107188,7 @@ var RookMagic [64]Magic = [64]Magic{
 		4647714815446351872,
 	}, 347058648433954889, 9115426935197958144, 52},
 }
-var BishopMagic [64]Magic = [64]Magic{
+var bishopMagic [64]Magic = [64]Magic{
 	{[]Bitboard{
 		9241421688590303744,
 		512,

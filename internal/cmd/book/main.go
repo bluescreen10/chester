@@ -16,7 +16,7 @@ const (
 	bookFile    = "book/Perfect2023.bin"
 )
 
-type BookEntry struct {
+type bookEntry struct {
 	key    uint64
 	move   uint16
 	weight uint16
@@ -340,8 +340,8 @@ func generateRandoms(w io.Writer) {
 	fmt.Fprintf(w, "}\n")
 }
 
-func readBookFile(path string) []BookEntry {
-	var book []BookEntry
+func readBookFile(path string) []bookEntry {
+	var book []bookEntry
 
 	bin, err := os.ReadFile(path)
 	if err != nil {
@@ -354,7 +354,7 @@ func readBookFile(path string) []BookEntry {
 		move := binary.BigEndian.Uint16(bin[i+8 : i+10])
 		weight := binary.BigEndian.Uint16(bin[i+10 : i+12])
 
-		book = append(book, BookEntry{
+		book = append(book, bookEntry{
 			key:    key,
 			move:   move,
 			weight: weight,
@@ -363,24 +363,24 @@ func readBookFile(path string) []BookEntry {
 	return book
 }
 
-func generateBook(w io.Writer, book []BookEntry) {
-	fmt.Fprintf(w, "type BookEntry struct {\n")
+func generateBook(w io.Writer, book []bookEntry) {
+	fmt.Fprintf(w, "type bookEntry struct {\n")
 	fmt.Fprintf(w, "\tMove Move\n")
 	fmt.Fprintf(w, "\tWeight uint16\n")
 	fmt.Fprintf(w, "}\n")
 
-	var sortedBook map[uint64][]BookEntry = map[uint64][]BookEntry{}
+	var sortedBook map[uint64][]bookEntry = map[uint64][]bookEntry{}
 	for _, entry := range book {
 		if _, ok := sortedBook[entry.key]; !ok {
-			sortedBook[entry.key] = []BookEntry{}
+			sortedBook[entry.key] = []bookEntry{}
 		}
 
-		sortedBook[entry.key] = append(sortedBook[entry.key], BookEntry{move: entry.move, weight: entry.weight})
+		sortedBook[entry.key] = append(sortedBook[entry.key], bookEntry{move: entry.move, weight: entry.weight})
 	}
 
-	fmt.Fprintf(w, "var Book map[uint64][]BookEntry = map[uint64][]BookEntry{\n")
+	fmt.Fprintf(w, "varbookmap[uint64][]bookEntry = map[uint64][]bookEntry{\n")
 	for key, entries := range sortedBook {
-		fmt.Fprintf(w, "\t0x%x: []BookEntry{\n", key)
+		fmt.Fprintf(w, "\t0x%x: []bookEntry{\n", key)
 		for _, entry := range entries {
 			fmt.Fprintf(w, "\t\t{Move: Move(0x%x), Weight: %d},\n", genMove(entry.move), entry.weight)
 		}

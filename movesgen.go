@@ -197,10 +197,10 @@ func genDiagonalAttacks(p *Position) Bitboard {
 // the provided occupancy, using magic bitboard lookup.
 func genBishopAttacks(sq Square, occupied Bitboard) Bitboard {
 
-	occupied &= BishopMagic[sq].Mask
-	occupied *= BishopMagic[sq].Magic
-	occupied >>= BishopMagic[sq].Shift
-	return BishopMagic[sq].Attacks[occupied]
+	occupied &= bishopMagic[sq].Mask
+	occupied *= bishopMagic[sq].Magic
+	occupied >>= bishopMagic[sq].Shift
+	return bishopMagic[sq].Attacks[occupied]
 }
 
 // genStraightAttacks returns a Bitboard of all squares attacked along ranks
@@ -225,10 +225,10 @@ func genStraightAttacks(p *Position) Bitboard {
 // genRookAttacks returns the set of squares a rook on sq attacks given the
 // provided occupancy, using magic bitboard lookup.
 func genRookAttacks(sq Square, occupied Bitboard) Bitboard {
-	occupied &= RookMagic[sq].Mask
-	occupied *= RookMagic[sq].Magic
-	occupied >>= RookMagic[sq].Shift
-	return RookMagic[sq].Attacks[occupied]
+	occupied &= rookMagic[sq].Mask
+	occupied *= rookMagic[sq].Magic
+	occupied >>= rookMagic[sq].Shift
+	return rookMagic[sq].Attacks[occupied]
 }
 
 // genKingAttacks returns a Bitboard of all squares attacked by the inactive
