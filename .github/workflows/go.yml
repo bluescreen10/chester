@@ -31,11 +31,10 @@ jobs:
 
       # Run tests + coverage
       - name: Run tests
-        run: go test ./... -v -coverprofile=coverage.out
+        run: go test ./... -v -coverprofile=coverage.txt
 
       # Upload coverage to Codecov
       - name: Upload coverage
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: coverage.out
