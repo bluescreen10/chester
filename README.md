@@ -1,7 +1,7 @@
 # Chester
 
 <p align="center">
-  <img src="logo/logo.png" width="200"/>
+  <img src="logo/logo.png"/>
 </p>
 
 A chess library and engine written in Go.
