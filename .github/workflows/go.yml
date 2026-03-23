@@ -10,22 +10,31 @@ on:
     branches: [ "main" ]
 
 jobs:
-
-  build:
+  test:
     runs-on: ubuntu-latest
+
     steps:
-    - uses: actions/checkout@v3
+      # Checkout
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Set up Go
-      uses: actions/setup-go@v3
-      with:
-        go-version: "1.26"
+      # Setup Go (with caching)
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+          cache: true
 
-    # Test the main module
-    - name: Test main module
-      run: go test -v ./...
+      # Download dependencies (optional but explicit)
+      - name: Download modules
+        run: go mod download
 
+      # Run tests + coverage
+      - name: Run tests
+        run: go test ./... -v -coverprofile=coverage.out
 
-
-
-
+      # Upload coverage to Codecov
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage.out
