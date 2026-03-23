@@ -5,7 +5,7 @@
 </p>
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/bluescreen10/chester.svg)](https://pkg.go.dev/github.com/bluescreen10/chester)
-[![Tests](https://github.com/bluescreen10/chester/actions/workflows/test.yml/badge.svg)](https://github.com/bluescreen10/chester/actions)
+[![Tests](https://github.com/bluescreen10/chester/actions/workflows/go.yml/badge.svg)](https://github.com/bluescreen10/chester/actions)
 [![codecov](https://codecov.io/gh/bluescreen10/chester/branch/main/graph/badge.svg)](https://codecov.io/gh/bluescreen10/chester)
 [![Go Report Card](https://goreportcard.com/badge/github.com/bluescreen10/chester)](https://goreportcard.com/report/github.com/bluescreen10/chester)
 ![Go Version](https://img.shields.io/github/go-mod/go-version/bluescreen10/chester)
