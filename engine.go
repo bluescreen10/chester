@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"math"
+	"math/rand/v2"
 )
 
 type evaluation struct {
@@ -15,6 +16,17 @@ func SearchBestMove(ctx context.Context, p *Position) chan evaluation {
 	ch := make(chan evaluation)
 
 	go func() {
+		defer close(ch)
+
+		if entries, ok := Book[p.hash]; ok {
+			move := pickMove(entries)
+			ch <- evaluation{
+				depth: 1,
+				best:  move.String(),
+			}
+			return
+		}
+
 		depth := 5
 		eval, m := minmax(p, math.MinInt, math.MaxInt, depth)
 		ch <- evaluation{
@@ -22,7 +34,6 @@ func SearchBestMove(ctx context.Context, p *Position) chan evaluation {
 			best:  m.String(),
 			score: eval,
 		}
-		close(ch)
 	}()
 	return ch
 }
@@ -135,4 +146,20 @@ func fmin(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func pickMove(entries []BookEntry) Move {
+	var total int
+	for _, m := range entries {
+		total += int(m.Weight)
+	}
+
+	r := rand.IntN(total)
+	for _, e := range entries {
+		r -= int(e.Weight)
+		if r < 0 {
+			return e.Move
+		}
+	}
+	return entries[len(entries)-1].Move
 }
