@@ -1,10 +1,12 @@
-package main
+package chester
 
 import (
 	"fmt"
 	"strconv"
 	"strings"
 )
+
+const DefaultFEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
 type Color uint8
 

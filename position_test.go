@@ -1,9 +1,9 @@
-package main_test
+package chester_test
 
 import (
 	"testing"
 
-	chester "github.com/bluescreen10/chester"
+	"github.com/bluescreen10/chester"
 )
 
 func TestParseFEN(t *testing.T) {

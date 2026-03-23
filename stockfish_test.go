@@ -1,7 +1,7 @@
 //go:build stockfish
 // +build stockfish
 
-package main_test
+package chester_test
 
 import (
 	"bufio"
@@ -16,7 +16,7 @@ import (
 
 	"math/rand"
 
-	chester "github.com/bluescreen10/chester"
+	"github.com/bluescreen10/chester"
 )
 
 func TestCompareToStockfish(t *testing.T) {

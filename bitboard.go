@@ -1,4 +1,4 @@
-package main
+package chester
 
 import (
 	"fmt"

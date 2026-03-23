@@ -1,4 +1,4 @@
-package main
+package chester
 
 type MoveCount struct {
 	Move  Move

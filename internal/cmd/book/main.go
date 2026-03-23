@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	packageName = "main"
+	packageName = "chester"
 	fileName    = "book.go"
 	bookFile    = "book/Perfect2023.bin"
 )

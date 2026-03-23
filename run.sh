@@ -11,7 +11,7 @@ mkdir -p build
 envsubst < config.template.yml > build/config.yml
 
 # build engine
-GOOS=linux GOARCH=arm64 go build -o build/chester
+GOOS=linux GOARCH=arm64 go build -o build/chester ./cmd/
 
 # restart container
 docker rm -f Chester || true

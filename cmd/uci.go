@@ -12,11 +12,13 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/bluescreen10/chester"
 )
 
 type UCIServer struct {
 	mutex          sync.Mutex
-	pos            Position
+	pos            chester.Position
 	bestMove       string
 	isCPUProfiling bool
 	CPUProfileFile *os.File
@@ -25,7 +27,7 @@ type UCIServer struct {
 }
 
 func startUCI() {
-	pos, _ := ParseFEN(DefaultFEN)
+	pos, _ := chester.ParseFEN(chester.DefaultFEN)
 	uci := &UCIServer{pos: pos}
 	uci.Start()
 }
@@ -134,7 +136,7 @@ func (s *UCIServer) handlePosition(args []string) {
 		}
 
 		fen := strings.Join(args[1:i], " ")
-		pos, err := ParseFEN(fen)
+		pos, err := chester.ParseFEN(fen)
 		if err != nil {
 			s.error("error parsing fen: %s", err)
 			return
@@ -153,7 +155,7 @@ func (s *UCIServer) handlePosition(args []string) {
 		for _, m := range args[1:] {
 			m = strings.TrimSpace(m)
 			if m != "" {
-				move, err := ParseMove(m, *p)
+				move, err := chester.ParseMove(m, *p)
 				if err != nil {
 					s.error("error parsing move: %s", err)
 					return
@@ -177,10 +179,10 @@ func (s *UCIServer) handleGo(args []string) {
 
 	go func() {
 		pos := s.pos
-		ch := SearchBestMove(ctx, &pos)
+		ch := chester.SearchBestMove(ctx, &pos)
 		for e := range ch {
-			s.info("depth %d score cp %d pv %s", e.depth, e.score, e.best)
-			s.bestMove = e.best
+			s.info("depth %d score cp %d pv %s", e.Depth, e.Score, e.Best)
+			s.bestMove = e.Best
 		}
 
 		s.WriteString("bestmove %s", s.bestMove)
@@ -217,7 +219,7 @@ func (s *UCIServer) handlePerft(args []string) {
 	go func() {
 		nodes := 0
 		start := time.Now()
-		ch := Perft(&s.pos, depth)
+		ch := chester.Perft(&s.pos, depth)
 		for m := range ch {
 			nodes += m.Count
 			s.WriteString("%s: %d", m.Move, m.Count)
@@ -267,7 +269,7 @@ func (s *UCIServer) handleDebug(args []string) {
 }
 
 func (s *UCIServer) resetPosition() {
-	pos, err := ParseFEN(DefaultFEN)
+	pos, err := chester.ParseFEN(chester.DefaultFEN)
 	if err != nil {
 		s.error("error parsing fen: %s", err)
 	}

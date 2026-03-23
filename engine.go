@@ -1,4 +1,4 @@
-package main
+package chester
 
 import (
 	"context"
@@ -6,33 +6,33 @@ import (
 	"math/rand/v2"
 )
 
-type evaluation struct {
-	depth int
-	best  string
-	score int
+type Evaluation struct {
+	Depth int
+	Best  string
+	Score int
 }
 
-func SearchBestMove(ctx context.Context, p *Position) chan evaluation {
-	ch := make(chan evaluation)
+func SearchBestMove(ctx context.Context, p *Position) chan Evaluation {
+	ch := make(chan Evaluation)
 
 	go func() {
 		defer close(ch)
 
 		if entries, ok := Book[p.hash]; ok {
 			move := pickMove(entries)
-			ch <- evaluation{
-				depth: 1,
-				best:  move.String(),
+			ch <- Evaluation{
+				Depth: 1,
+				Best:  move.String(),
 			}
 			return
 		}
 
 		depth := 5
 		eval, m := minmax(p, math.MinInt, math.MaxInt, depth)
-		ch <- evaluation{
-			depth: depth,
-			best:  m.String(),
-			score: eval,
+		ch <- Evaluation{
+			Depth: depth,
+			Best:  m.String(),
+			Score: eval,
 		}
 	}()
 	return ch

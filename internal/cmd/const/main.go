@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	packageName = "main"
+	packageName = "chester"
 	fileName    = "const.go"
 )
 

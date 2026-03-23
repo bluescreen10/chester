@@ -1,4 +1,4 @@
-package main
+package chester
 
 const (
 	WhiteQueenSideCastleFree        = BB_SQ_B1 | BB_SQ_C1 | BB_SQ_D1

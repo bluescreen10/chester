@@ -1,11 +1,11 @@
-package main_test
+package chester_test
 
 import (
 	"fmt"
 	"slices"
 	"testing"
 
-	chester "github.com/bluescreen10/chester"
+	"github.com/bluescreen10/chester"
 )
 
 func TestMoveGen(t *testing.T) {
