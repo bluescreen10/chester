@@ -18,7 +18,7 @@ import (
 
 type UCIServer struct {
 	mutex          sync.Mutex
-	pos            chester.Position
+	pos            *chester.Position
 	bestMove       string
 	isCPUProfiling bool
 	CPUProfileFile *os.File
@@ -147,25 +147,22 @@ func (s *UCIServer) handlePosition(args []string) {
 		s.error("unknown position argument: %s", args[1])
 	}
 
-	p := &s.pos
-
 	s.debug("args: %v", args)
 
 	if len(args) > 0 && args[0] == "moves" {
 		for _, m := range args[1:] {
 			m = strings.TrimSpace(m)
 			if m != "" {
-				move, err := chester.ParseMove(m, *p)
+				move, err := chester.ParseMove(m, s.pos)
 				if err != nil {
 					s.error("error parsing move: %s", err)
 					return
 				}
-				p.Do(move)
+				s.pos.Do(move)
 				s.debug("position: %s", s.pos.String())
 			}
 		}
 	}
-	s.pos = *p
 }
 
 func (s *UCIServer) handleGo(args []string) {
@@ -178,7 +175,7 @@ func (s *UCIServer) handleGo(args []string) {
 	s.stopFunc = f
 
 	go func() {
-		pos := s.pos
+		pos := *s.pos
 		ch := chester.SearchBestMove(ctx, &pos)
 		for e := range ch {
 			s.info("depth %d score cp %d pv %s", e.Depth, e.Score, e.Best)
@@ -219,7 +216,8 @@ func (s *UCIServer) handlePerft(args []string) {
 	go func() {
 		nodes := 0
 		start := time.Now()
-		ch := chester.Perft(&s.pos, depth)
+		pos := *s.pos
+		ch := chester.Perft(&pos, depth)
 		for m := range ch {
 			nodes += m.Count
 			s.WriteString("%s: %d", m.Move, m.Count)
