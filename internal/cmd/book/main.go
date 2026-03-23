@@ -274,7 +274,7 @@ func generatePreamble(w io.Writer, file string) {
 // }
 
 func generateRandoms(w io.Writer) {
-	fmt.Fprintf(w, "type ZobristTable struct {\n")
+	fmt.Fprintf(w, "type polyglotRandoms struct {\n")
 	fmt.Fprintf(w, "\tPieces      [Color(2)][Piece(6)][Square(64)]uint64\n")
 	fmt.Fprintf(w, "\tCastling    [4]uint64\n")
 	fmt.Fprintf(w, "\tEnPassant   [8]uint64\n")
@@ -282,7 +282,7 @@ func generateRandoms(w io.Writer) {
 	fmt.Fprintf(w, "}\n")
 
 	// beginning
-	fmt.Fprintf(w, "var zobrist = ZobristTable{\n")
+	fmt.Fprintf(w, "var polyglotTable = polyglotRandoms{\n")
 
 	// pieces
 	fmt.Fprintf(w, "\tPieces: [2][6][64]uint64{\n")

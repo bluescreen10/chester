@@ -33,7 +33,7 @@ func LegalMoves(moves []Move, p *Position) ([]Move, bool) {
 		moves = genPawnLeftAttackMoves(moves, p, cpm)
 		moves = genPawnRightAttackMoves(moves, p, cpm)
 
-		if p.EnPassantTarget() != 0 {
+		if p.EnPassantTarget() != SQ_NULL {
 			moves = genPawnEnPassantMoves(moves, p, cpm)
 		}
 		moves = genKnightMoves(moves, p, cpm)
@@ -205,7 +205,7 @@ func genPawnForwardMoves(moves []Move, p *Position, cpm checkersPinsAndMask) []M
 		from = to - sp
 
 		if to < SQ_A1 && to > SQ_H8 {
-			moves = append(moves, NewMove(from, to, Pawn))
+			moves = append(moves, NewMove(from, to))
 		} else {
 			moves = append(moves,
 				NewPromotionMove(from, to, Queen),
@@ -221,7 +221,7 @@ func genPawnForwardMoves(moves []Move, p *Position, cpm checkersPinsAndMask) []M
 	for doublePushes != 0 {
 		to, doublePushes = doublePushes.PopLSB()
 		from = to - dp
-		moves = append(moves, NewDoublePushMove(from, to))
+		moves = append(moves, NewMove(from, to))
 	}
 	return moves
 }
@@ -242,7 +242,7 @@ func genPawnLeftAttackMoves(moves []Move, p *Position, cpm checkersPinsAndMask) 
 		to, attacks = attacks.PopLSB()
 		from = to - Square(leftAttacks)
 		if to < SQ_A1 && to > SQ_H8 {
-			moves = append(moves, NewMove(from, to, Pawn))
+			moves = append(moves, NewMove(from, to))
 		} else {
 			moves = append(moves,
 				NewPromotionMove(from, to, Queen),
@@ -272,7 +272,7 @@ func genPawnRightAttackMoves(moves []Move, p *Position, cpm checkersPinsAndMask)
 		to, attacks = attacks.PopLSB()
 		from = to - Square(rightAttacks)
 		if to < SQ_A1 && to > SQ_H8 {
-			moves = append(moves, NewMove(from, to, Pawn))
+			moves = append(moves, NewMove(from, to))
 		} else {
 			moves = append(moves,
 				NewPromotionMove(from, to, Queen),
@@ -293,30 +293,32 @@ func genPawnEnPassantMoves(moves []Move, p *Position, cpm checkersPinsAndMask) [
 	kingSq, _ := p.King().PopLSB()
 	enemyQueensOrRooks := p.EnemyQueensOrRooks()
 
-	pawnsOnRank := p.Pawns() &^ (cpm.diagonalPins | cpm.straightPins)
-	enPassantTarget := p.EnPassantTarget()
+	pawns := p.Pawns() &^ (cpm.diagonalPins | cpm.straightPins)
+	leftAttacks := int(16*us - 9)
+	rightAttacks := int(16*us - 7)
+	enPassantTarget := NewBitboardFromSquare(p.EnPassantTarget())
 
-	left := pawnsOnRank & (File_Not_A & enPassantTarget >> 1)
+	left := (pawns & File_Not_A).RotateLeft(leftAttacks) & enPassantTarget
 	if left != 0 {
 		occupiedWithoutPawns := p.Occupied() &^ (left | enPassantTarget)
 		path := genRookAttacks(kingSq, occupiedWithoutPawns) & enPassantRanks
 
 		if enemyQueensOrRooks&path == 0 {
-			from, _ := left.PopLSB()
-			to := from + 16*Square(us) - 7
-			moves = append(moves, NewEnPassantMove(from, to))
+			to, _ := left.PopLSB()
+			from := to - Square(leftAttacks)
+			moves = append(moves, NewMove(from, to))
 		}
 	}
 
-	right := pawnsOnRank & (File_Not_H & enPassantTarget << 1)
+	right := (pawns & File_Not_H).RotateLeft(rightAttacks) & enPassantTarget
 	if right != 0 {
 		occupiedWithoutPawns := p.Occupied() &^ (right | enPassantTarget)
 		path := genRookAttacks(kingSq, occupiedWithoutPawns) & enPassantRanks
 
 		if enemyQueensOrRooks&path == 0 {
-			from, _ := right.PopLSB()
-			to := from + 16*Square(us) - 9
-			moves = append(moves, NewEnPassantMove(from, to))
+			to, _ := right.PopLSB()
+			from := to - Square(rightAttacks)
+			moves = append(moves, NewMove(from, to))
 		}
 	}
 
@@ -332,7 +334,7 @@ func genKnightMoves(moves []Move, p *Position, cpm checkersPinsAndMask) []Move {
 
 		for targets != 0 {
 			to, targets = targets.PopLSB()
-			moves = append(moves, NewMove(from, to, Knight))
+			moves = append(moves, NewMove(from, to))
 		}
 
 	}
@@ -350,7 +352,7 @@ func genBishopMoves(moves []Move, p *Position, cpm checkersPinsAndMask) []Move {
 
 		for targets != 0 {
 			to, targets = targets.PopLSB()
-			moves = append(moves, NewMove(from, to, Bishop))
+			moves = append(moves, NewMove(from, to))
 		}
 	}
 
@@ -360,7 +362,7 @@ func genBishopMoves(moves []Move, p *Position, cpm checkersPinsAndMask) []Move {
 
 		for targets != 0 {
 			to, targets = targets.PopLSB()
-			moves = append(moves, NewMove(from, to, Bishop))
+			moves = append(moves, NewMove(from, to))
 		}
 	}
 
@@ -377,7 +379,7 @@ func genRookMoves(moves []Move, p *Position, cpm checkersPinsAndMask) []Move {
 
 		for targets != 0 {
 			to, targets = targets.PopLSB()
-			moves = append(moves, NewMove(from, to, Rook))
+			moves = append(moves, NewMove(from, to))
 		}
 	}
 
@@ -387,7 +389,7 @@ func genRookMoves(moves []Move, p *Position, cpm checkersPinsAndMask) []Move {
 
 		for targets != 0 {
 			to, targets = targets.PopLSB()
-			moves = append(moves, NewMove(from, to, Rook))
+			moves = append(moves, NewMove(from, to))
 		}
 	}
 
@@ -406,7 +408,7 @@ func genQueenMoves(moves []Move, p *Position, cpm checkersPinsAndMask) []Move {
 
 		for targets != 0 {
 			to, targets = targets.PopLSB()
-			moves = append(moves, NewMove(from, to, Queen))
+			moves = append(moves, NewMove(from, to))
 		}
 	}
 
@@ -416,7 +418,7 @@ func genQueenMoves(moves []Move, p *Position, cpm checkersPinsAndMask) []Move {
 
 		for targets != 0 {
 			to, targets = targets.PopLSB()
-			moves = append(moves, NewMove(from, to, Queen))
+			moves = append(moves, NewMove(from, to))
 		}
 	}
 
@@ -426,7 +428,7 @@ func genQueenMoves(moves []Move, p *Position, cpm checkersPinsAndMask) []Move {
 
 		for targets != 0 {
 			to, targets = targets.PopLSB()
-			moves = append(moves, NewMove(from, to, Queen))
+			moves = append(moves, NewMove(from, to))
 		}
 	}
 
@@ -451,7 +453,7 @@ func genKingMoves(moves []Move, p *Position) []Move {
 	for targets := potentialTargets &^ (enemyKing | attacked); targets != 0; {
 		var to Square
 		to, targets = targets.PopLSB()
-		moves = append(moves, NewMove(from, to, King))
+		moves = append(moves, NewMove(from, to))
 	}
 
 	// castling
@@ -459,13 +461,13 @@ func genKingMoves(moves []Move, p *Position) []Move {
 		if p.CanWhiteCastleKingSide() &&
 			WhiteKingSideCastleFree&p.Occupied() == 0 &&
 			WhiteKingSideCastleNotAttacked&attacked == 0 {
-			moves = append(moves, NewCastleKingSideMove(SQ_E1, SQ_G1))
+			moves = append(moves, NewMove(SQ_E1, SQ_G1))
 		}
 
 		if p.CanWhiteCastleQueenSide() &&
 			WhiteQueenSideCastleFree&p.Occupied() == 0 &&
 			WhiteQueenSideCastleNotAttacked&attacked == 0 {
-			moves = append(moves, NewCastleQueenSideMove(SQ_E1, SQ_C1))
+			moves = append(moves, NewMove(SQ_E1, SQ_C1))
 		}
 	}
 
@@ -473,13 +475,13 @@ func genKingMoves(moves []Move, p *Position) []Move {
 		if p.CanBlackCastleKingSide() &&
 			BlackKingSideCastleFree&p.Occupied() == 0 &&
 			BlackKingSideCastleNotAttacked&attacked == 0 {
-			moves = append(moves, NewCastleKingSideMove(SQ_E8, SQ_G8))
+			moves = append(moves, NewMove(SQ_E8, SQ_G8))
 		}
 
 		if p.CanBlackCastleQueenSide() &&
 			BlackQueenSideCastleFree&p.Occupied() == 0 &&
 			BlackQueenSideCastleNotAttacked&attacked == 0 {
-			moves = append(moves, NewCastleQueenSideMove(SQ_E8, SQ_C8))
+			moves = append(moves, NewMove(SQ_E8, SQ_C8))
 		}
 	}
 

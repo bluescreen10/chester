@@ -30,32 +30,32 @@ func TestUpdateWhiteCastlingRights(t *testing.T) {
 	}{
 		{
 			fen:      "4k3/8/8/8/3b4/8/8/R3K2R w KQ - 0 1",
-			move:     chester.NewCastleKingSideMove(chester.SQ_E1, chester.SQ_G1),
+			move:     chester.NewMove(chester.SQ_E1, chester.SQ_G1),
 			expected: "4k3/8/8/8/3b4/8/8/R4RK1 b - - 1 1",
 		},
 		{
 			fen:      "4k3/8/8/8/3b4/8/8/R3K2R w KQ - 0 1",
-			move:     chester.NewCastleQueenSideMove(chester.SQ_E1, chester.SQ_C1),
+			move:     chester.NewMove(chester.SQ_E1, chester.SQ_C1),
 			expected: "4k3/8/8/8/3b4/8/8/2KR3R b - - 1 1",
 		},
 		{
 			fen:      "4k3/8/8/8/3b4/8/8/R3K2R w KQ - 0 1",
-			move:     chester.NewMove(chester.SQ_A1, chester.SQ_B1, chester.Rook),
+			move:     chester.NewMove(chester.SQ_A1, chester.SQ_B1),
 			expected: "4k3/8/8/8/3b4/8/8/1R2K2R b K - 1 1",
 		},
 		{
 			fen:      "4k3/8/8/8/3b4/8/8/R3K2R w KQ - 0 1",
-			move:     chester.NewMove(chester.SQ_H1, chester.SQ_G1, chester.Rook),
+			move:     chester.NewMove(chester.SQ_H1, chester.SQ_G1),
 			expected: "4k3/8/8/8/3b4/8/8/R3K1R1 b Q - 1 1",
 		},
 		{
 			fen:      "4k3/8/8/8/3b4/8/8/R3K2R b KQ - 0 1",
-			move:     chester.NewMove(chester.SQ_D4, chester.SQ_A1, chester.Bishop),
+			move:     chester.NewMove(chester.SQ_D4, chester.SQ_A1),
 			expected: "4k3/8/8/8/8/8/8/b3K2R w K - 0 2",
 		},
 		{
 			fen:      "4k3/8/8/8/4b3/8/8/R3K2R b KQ - 0 1",
-			move:     chester.NewMove(chester.SQ_E4, chester.SQ_H1, chester.Bishop),
+			move:     chester.NewMove(chester.SQ_E4, chester.SQ_H1),
 			expected: "4k3/8/8/8/8/8/8/R3K2b w Q - 0 2",
 		},
 	}
@@ -106,20 +106,20 @@ func TestEnPassant(t *testing.T) {
 		{
 			fen:             "4k3/8/8/8/3Pp3/8/8/R3K2R b KQ d3 0 1",
 			after:           "4k3/8/8/8/8/3p4/8/R3K2R w KQ - 0 2",
-			move:            chester.NewEnPassantMove(chester.SQ_E4, chester.SQ_D3),
+			move:            chester.NewMove(chester.SQ_E4, chester.SQ_D3),
 			enPassantTarget: chester.SQ_NULL,
 		},
 		{
 			fen:             "4k3/8/8/8/4p3/8/3P4/R3K2R w KQ - 0 1",
 			after:           "4k3/8/8/8/3Pp3/8/8/R3K2R b KQ d3 0 1",
-			move:            chester.NewDoublePushMove(chester.SQ_D2, chester.SQ_D4),
-			enPassantTarget: chester.SQ_D4,
+			move:            chester.NewMove(chester.SQ_D2, chester.SQ_D4),
+			enPassantTarget: chester.SQ_D3,
 		},
 		{
 			fen:             "rnbqkb1r/pppppppp/7n/P7/8/8/1PPPPPPP/RNBQKBNR b KQkq - 0 3",
 			after:           "rnbqkb1r/p1pppppp/7n/Pp6/8/8/1PPPPPPP/RNBQKBNR w KQkq b6 0 4",
-			move:            chester.NewDoublePushMove(chester.SQ_B7, chester.SQ_B5),
-			enPassantTarget: chester.SQ_B5,
+			move:            chester.NewMove(chester.SQ_B7, chester.SQ_B5),
+			enPassantTarget: chester.SQ_B6,
 		},
 	}
 
@@ -130,7 +130,7 @@ func TestEnPassant(t *testing.T) {
 		}
 
 		p.Do(test.move)
-		if got := p.EnPassantTarget().Square(); got != test.enPassantTarget {
+		if got := p.EnPassantTarget(); got != test.enPassantTarget {
 			t.Errorf("Do(%s) failed to update en passant Square expected %s got %s", test.move, test.enPassantTarget, got)
 		}
 

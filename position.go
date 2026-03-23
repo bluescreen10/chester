@@ -37,14 +37,17 @@ const (
 type Position struct {
 	pieces    [Piece(6)]Bitboard
 	allPieces [Color(2)]Bitboard
-	hash      uint64
 
-	enPassantTarget Bitboard
+	//Zobrist hash
+	hash uint64
 
-	fullMoves        uint16
-	halfMoves        uint8
+	enPassantTarget Square
+
 	castlingRights   castlingRights
 	active, inactive Color
+
+	halfMoves uint8
+	fullMoves uint16
 }
 
 func ParseFEN(fen string) (Position, error) {
@@ -129,13 +132,7 @@ func ParseFEN(fen string) (Position, error) {
 		}
 	}
 
-	if sq := SquareFromString(parts[3]); sq != SQ_NULL {
-		if pos.Active() == White {
-			pos.enPassantTarget = NewBitboardFromSquare(sq + 8)
-		} else {
-			pos.enPassantTarget = NewBitboardFromSquare(sq - 8)
-		}
-	}
+	pos.enPassantTarget = SquareFromString(parts[3])
 
 	halfMoves, err := strconv.Atoi(parts[4])
 	if err != nil {
@@ -230,11 +227,7 @@ func (p Position) Fen() string {
 	}
 
 	fen.WriteByte(' ')
-	if p.Active() == White {
-		fen.WriteString((p.enPassantTarget >> 8).Square().String())
-	} else {
-		fen.WriteString((p.enPassantTarget << 8).Square().String())
-	}
+	fen.WriteString(p.enPassantTarget.String())
 	fen.WriteString(fmt.Sprintf(" %d %d", p.halfMoves, p.fullMoves))
 
 	return fen.String()
@@ -313,65 +306,88 @@ func (p *Position) Occupied() Bitboard {
 }
 
 func (p *Position) Do(m Move) {
-
-	from := Bitboard(1) << m.From()
-	to := Bitboard(1) << m.To()
-	isCapture := p.Enemies()&to != 0
-	piece := m.Piece()
+	from := m.From()
+	to := m.To()
+	fromBB := Bitboard(1) << from
+	toBB := Bitboard(1) << to
+	isCapture := p.Enemies()&toBB != 0
 	enPassantTarget := p.enPassantTarget
-	p.enPassantTarget = 0
+	p.enPassantTarget = SQ_NULL
+	p.halfMoves++
 
-	switch m.Type() {
-	case Promotion:
-		if isCapture {
-			p.removeAll(p.inactive, to)
-			p.updateCastlingRights(from | to)
-		}
-		p.remove(Pawn, p.active, from)
-		p.put(m.PromoPiece(), p.active, to)
+	diff := int(to) - int(from)
 
-	case EnPassant:
-		isCapture = true
-		p.remove(Pawn, p.inactive, enPassantTarget)
-		p.move(Pawn, p.active, from, to)
-	case CastleKingSide:
-		p.move(King, p.active, from, to)
-		if p.active == White {
-			p.move(Rook, White, BB_SQ_H1, BB_SQ_F1)
-		} else {
-			p.move(Rook, Black, BB_SQ_H8, BB_SQ_F8)
+	//Note: maybe implementing a mailbox can help here
+	var piece Piece
+	for i, p := range p.pieces {
+		if fromBB&p != 0 {
+			piece = Piece(i)
+			break
 		}
-		p.updateCastlingRights(from)
-
-	case CastleQueenSide:
-		p.move(King, p.active, from, to)
-		if p.active == White {
-			p.move(Rook, White, BB_SQ_A1, BB_SQ_D1)
-		} else {
-			p.move(Rook, Black, BB_SQ_A8, BB_SQ_D8)
-		}
-		p.updateCastlingRights(from)
-	case DoublePush:
-		p.move(Pawn, p.active, from, to)
-		p.enPassantTarget = to
-	default:
-		if isCapture {
-			p.removeAll(p.inactive, to)
-		}
-		p.move(piece, p.active, from, to)
-		p.updateCastlingRights(from | to)
 	}
 
-	if !isCapture && piece != Pawn {
-		p.halfMoves++
-	} else {
+	if isCapture {
 		p.halfMoves = 0
+		for i, bb := range p.pieces {
+			if toBB&bb != 0 {
+				p.remove(Piece(i), p.inactive, toBB)
+				if Piece(i) == Rook {
+					p.updateCastlingRights(toBB)
+				}
+				break
+			}
+		}
 	}
 
-	if p.active == Black {
-		p.fullMoves++
+	switch piece {
+	case Pawn:
+		p.halfMoves = 0
+		switch {
+		case m.IsPromotion():
+			p.remove(Pawn, p.active, fromBB)
+			p.put(m.PromoPiece(), p.active, toBB)
+		case to == enPassantTarget:
+			p.move(Pawn, p.active, fromBB, toBB)
+			if p.active == White {
+				p.remove(Pawn, p.inactive, toBB<<8)
+			} else {
+				p.remove(Pawn, p.inactive, toBB>>8)
+			}
+		case diff == 16 || diff == -16:
+			p.move(Pawn, p.active, fromBB, toBB)
+			if p.EnemyPawns()&(toBB<<1|toBB>>1) != 0 {
+				p.enPassantTarget = (to + from) >> 1
+			}
+		default:
+			p.move(Pawn, p.active, fromBB, toBB)
+		}
+	case King:
+		p.move(King, p.active, fromBB, toBB)
+		p.updateCastlingRights(fromBB)
+
+		switch diff {
+		case 2:
+			if p.active == White {
+				p.move(Rook, White, BB_SQ_H1, BB_SQ_F1)
+			} else {
+				p.move(Rook, Black, BB_SQ_H8, BB_SQ_F8)
+			}
+		case -2:
+			if p.active == White {
+				p.move(Rook, White, BB_SQ_A1, BB_SQ_D1)
+			} else {
+				p.move(Rook, Black, BB_SQ_A8, BB_SQ_D8)
+			}
+		}
+
+	default:
+		p.move(piece, p.active, fromBB, toBB)
+		if piece == Rook {
+			p.updateCastlingRights(fromBB)
+		}
 	}
 
+	p.fullMoves += uint16(p.active)
 	p.active, p.inactive = p.inactive, p.active
 }
 
@@ -401,15 +417,6 @@ func (p *Position) put(piece Piece, color Color, sq Bitboard) {
 func (p *Position) remove(piece Piece, color Color, sq Bitboard) {
 	p.allPieces[color] &^= sq
 	p.pieces[piece] &^= sq
-}
-
-func (p *Position) removeAll(color Color, sq Bitboard) {
-	p.allPieces[color] &^= sq
-	p.pieces[Pawn] &^= sq
-	p.pieces[Knight] &^= sq
-	p.pieces[Bishop] &^= sq
-	p.pieces[Rook] &^= sq
-	p.pieces[Queen] &^= sq
 }
 
 func (p *Position) Get(sq Square) Piece {
@@ -551,7 +558,7 @@ func (p *Position) HalfMoves() uint8 {
 	return p.halfMoves
 }
 
-func (p *Position) EnPassantTarget() Bitboard {
+func (p *Position) EnPassantTarget() Square {
 	return p.enPassantTarget
 }
 
@@ -568,36 +575,35 @@ func computeHash(p *Position) uint64 {
 			var sq Square
 			for bb != 0 {
 				sq, bb = bb.PopLSB()
-				hash ^= zobrist.Pieces[color][piece][sq]
+				hash ^= polyglotTable.Pieces[color][piece][sq]
 			}
 		}
 	}
 
 	if p.CanWhiteCastleKingSide() {
-		hash ^= zobrist.Castling[0]
+		hash ^= polyglotTable.Castling[0]
 	}
 
 	if p.CanWhiteCastleQueenSide() {
-		hash ^= zobrist.Castling[1]
+		hash ^= polyglotTable.Castling[1]
 	}
 
 	if p.CanBlackCastleKingSide() {
-		hash ^= zobrist.Castling[2]
+		hash ^= polyglotTable.Castling[2]
 	}
 
 	if p.CanBlackCastleQueenSide() {
-		hash ^= zobrist.Castling[3]
+		hash ^= polyglotTable.Castling[3]
 	}
 
 	//FIXME: only if they are actually adjancent pawns
-	if p.EnPassantTarget() != 0 {
-		sq, _ := p.EnPassantTarget().PopLSB()
+	if sq := p.EnPassantTarget(); sq != SQ_NULL {
 		file := sq.File()
-		hash ^= zobrist.EnPassant[file]
+		hash ^= polyglotTable.EnPassant[file]
 	}
 
 	if p.Active() == White {
-		hash ^= zobrist.WhiteToMove
+		hash ^= polyglotTable.WhiteToMove
 	}
 
 	return hash
