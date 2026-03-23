@@ -1,5 +1,9 @@
 # Chester
 
+<p align="center">
+  <img src="logo/logo.png" width="200"/>
+</p>
+
 A chess library and engine written in Go.
 
 ## Library Features
