@@ -1,10 +1,10 @@
-token: "${LICHESS_TOKEN}"
 url: "https://lichess.org/"
+token: ""
 
 engine:
-  name: "Chester"
-  cmd: ./chester
-  dir: "/lichess-bot/config"
+  name: "chester"
+  cmd: chester
+  dir: "/lichess-bot"
   protocol: uci
 
 challenge:

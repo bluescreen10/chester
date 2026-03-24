@@ -72,6 +72,8 @@ func negamax(p *Position, alpha, beta, depth, ply int) (int, Move) {
 	if depth == 0 {
 		return quiescence(p, alpha, beta), Move(0)
 	}
+
+	//FIXME: pass moves to avoid allocations
 	moves := make([]Move, 0, 218)
 	moves, inCheck := LegalMoves(moves, p)
 
