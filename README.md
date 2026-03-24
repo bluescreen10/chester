@@ -23,7 +23,7 @@ A chess library and engine written in Go.
 ## Engine Features
 
 - Universal Chess Interface (UCI)
-- Minimax with Alpha-Beta pruning
+- Negamax with Alpha-Beta pruning
 - PeSTO evaluation function
 - Opening book support (Polyglot `.bin` format)
 

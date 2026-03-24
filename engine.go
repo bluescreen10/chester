@@ -6,6 +6,12 @@ import (
 	"math/rand/v2"
 )
 
+const (
+	// Scored used to track available Mates
+	Inf       = 1_000_000_000
+	MateScore = 1_000_000
+)
+
 // Evaluation holds the result of a search at a given depth.
 type Evaluation struct {
 	// Search depth reached.
@@ -14,7 +20,7 @@ type Evaluation struct {
 	// Best move in pure algebraic coordinate notation (e.g. "e2e4").
 	Best string
 
-	// Centipawn score from White's perspective.
+	// Centipawn score from the side to move perspective
 	Score int
 }
 
@@ -23,7 +29,7 @@ type Evaluation struct {
 // The search runs in a separate goroutine and respects ctx for cancellation.
 //
 // If the position is found in the opening book the book move is returned
-// immediately at depth 1 with no score. Otherwise a fixed-depth minimax
+// immediately at depth 1 with no score. Otherwise a fixed-depth negamax
 // search with Alpha-Beta pruning is performed.
 func SearchBestMove(ctx context.Context, p *Position) chan Evaluation {
 	ch := make(chan Evaluation)
@@ -41,7 +47,7 @@ func SearchBestMove(ctx context.Context, p *Position) chan Evaluation {
 		}
 
 		depth := 5
-		eval, m := minmax(p, math.MinInt, math.MaxInt, depth)
+		eval, m := negamax(p, -Inf, Inf, depth, 0)
 		ch <- Evaluation{
 			Depth: depth,
 			Best:  m.String(),
@@ -51,119 +57,81 @@ func SearchBestMove(ctx context.Context, p *Position) chan Evaluation {
 	return ch
 }
 
-// minmax performs a recursive minimax search with Alpha-Beta pruning from
+// negamax performs a recursive negamax search with Alpha-Beta pruning from
 // position p. It returns the best score achievable and the corresponding
 // move. alpha and beta are the current window bounds; depth is the remaining
 // plies to search.
 //
-// White is the maximising player; Black is the minimising player.
+// Negamax assumes both players maximize their score, with evaluation
+// always from the side-to-move perspective.
 // Checkmate is detected when the side to move is in check with no legal
 // moves; stalemate when there are no legal moves and the king is not in
 // check. Both are handled before recursing so that eval is never called on
 // a terminal position.
-func minmax(p *Position, alpha, beta, depth int) (int, Move) {
+func negamax(p *Position, alpha, beta, depth, ply int) (int, Move) {
 	if depth == 0 {
 		return evalPesto(p), Move(0)
 	}
 	moves := make([]Move, 0, 218)
 	moves, inCheck := LegalMoves(moves, p)
 
-	if inCheck && len(moves) == 0 {
-		if p.Active() == White {
-			return math.MinInt, Move(0)
-		} else {
-			return math.MaxInt, Move(0)
-		}
-	}
-
 	if len(moves) == 0 {
-		return 0, Move(0)
+		if inCheck {
+			return -MateScore + ply, Move(0)
+		} else {
+			return 0, Move(0)
+		}
 	}
 
-	if p.Active() == White {
-		max := math.MinInt
-		best := moves[0]
+	bestScore := math.MinInt
+	best := moves[0]
 
-		var newPos Position
+	var newPos Position
 
-		for _, m := range moves {
-			newPos = *p
-			newPos.Do(m)
-			eval, _ := minmax(&newPos, alpha, beta, depth-1)
-			if eval > max {
-				best = m
-				max = eval
-			}
+	for _, m := range moves {
+		newPos = *p
+		newPos.Do(m)
+		score, _ := negamax(&newPos, -beta, -alpha, depth-1, ply+1)
+		score = -score
 
-			alpha = fmax(alpha, eval)
-			if alpha >= beta {
-				break
-			}
+		if score > bestScore {
+			bestScore = score
+			best = m
 		}
-		return max, best
-	} else {
-		min := math.MaxInt
-		best := moves[0]
 
-		var newPos Position
-
-		for _, m := range moves {
-			newPos = *p
-			newPos.Do(m)
-			eval, _ := minmax(&newPos, alpha, beta, depth-1)
-			if eval < min {
-				best = m
-				min = eval
-			}
-
-			beta = fmin(beta, eval)
-			if beta <= alpha {
-				break
-			}
+		if score > alpha {
+			alpha = score
 		}
-		return min, best
+
+		if alpha >= beta {
+			break
+		}
 	}
+	return bestScore, best
 }
 
-// eval returns a static evaluation of position p in centipawns from White's
-// perspective using material count only. Positive values favour White,
-// negative values favour Black.
+// eval returns a static evaluation of position p in centipawns
+// using material count only. Positive values favour Attacking,
+// negative values favour Defending.
 //
 // Piece values:
 //
 //	Pawn=100  Knight=300  Bishop=300  Rook=500  Queen=900
 func eval(p *Position) int {
-	wPawns := p.WhitePawns().OnesCount()
-	wKnight := p.WhiteKnights().OnesCount()
-	wBishop := p.WhiteBishops().OnesCount()
-	wRook := p.WhiteRooks().OnesCount()
-	wQueen := p.WhiteQueens().OnesCount()
+	pawns := p.Pawns().OnesCount()
+	knight := p.Knights().OnesCount()
+	bishop := p.Bishops().OnesCount()
+	rook := p.Rooks().OnesCount()
+	queen := p.Queens().OnesCount()
 
-	bPawns := p.BlackPawns().OnesCount()
-	bKnight := p.BlackKnights().OnesCount()
-	bBishop := p.BlackBishops().OnesCount()
-	bRook := p.BlackRooks().OnesCount()
-	bQueen := p.BlackQueens().OnesCount()
+	ePawns := p.EnemyPawns().OnesCount()
+	eKnight := p.EnemyKnights().OnesCount()
+	eBishop := p.EnemyBishops().OnesCount()
+	eRook := p.EnemyRooks().OnesCount()
+	eQueen := p.EnemyQueens().OnesCount()
 
-	return (wPawns + wKnight*3 + wBishop*3 + wRook*5 + wQueen*9 -
-		bPawns - bKnight*3 - bBishop*3 - bRook*5 - bQueen*9) * 100
-}
-
-// fmax returns the larger of a and b.
-func fmax(a, b int) int {
-	if a > b {
-		return a
-	}
-
-	return b
-}
-
-// fmin returns the smaller of a and b.
-func fmin(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
+	return (pawns + knight*3 + bishop*3 + rook*5 + queen*9 -
+		ePawns - eKnight*3 - eBishop*3 - eRook*5 - eQueen*9) * 100
 }
 
 // pickMove selects a move from a set of book entries using weighted random
@@ -385,8 +353,8 @@ func evalPesto(p *Position) int {
 		bb <<= 1
 	}
 
-	mgScore := mg[White] - mg[Black]
-	egScore := eg[White] - eg[Black]
+	mgScore := mg[p.active] - mg[p.inactive]
+	egScore := eg[p.active] - eg[p.inactive]
 	mgPhase := gamePhase
 	if mgPhase > 24 {
 		mgPhase = 24
