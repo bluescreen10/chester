@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 	"math/rand/v2"
+	"time"
 )
 
 const (
@@ -18,10 +19,34 @@ type Evaluation struct {
 	Depth int
 
 	// Best move in pure algebraic coordinate notation (e.g. "e2e4").
-	Best string
+	Best Move
 
 	// Centipawn score from the side to move perspective
 	Score int
+}
+
+type EvalFunc func(*Position) int
+
+type SearchOptions struct {
+	MaxTime  time.Duration
+	MaxNodes int64
+	MaxDepth int
+	Moves    []Move
+	EvalFunc EvalFunc
+}
+
+var defaultSearchOptions = &SearchOptions{
+	MaxTime:  time.Duration(20 * time.Second),
+	MaxNodes: math.MaxInt64,
+	MaxDepth: 7,
+	EvalFunc: EvalPesto,
+}
+
+type searchCtx struct {
+	ctx      context.Context
+	maxNodes int64
+	nodes    int64
+	qnodes   int64
 }
 
 // SearchBestMove searches for the best move in position p and sends the
@@ -31,8 +56,17 @@ type Evaluation struct {
 // If the position is found in the opening book the book move is returned
 // immediately at depth 1 with no score. Otherwise a fixed-depth negamax
 // search with Alpha-Beta pruning is performed.
-func SearchBestMove(ctx context.Context, p *Position) chan Evaluation {
+func SearchBestMove(p *Position, opts *SearchOptions) (chan Evaluation, context.CancelFunc) {
+	if opts == nil {
+		opts = defaultSearchOptions
+	}
+
 	ch := make(chan Evaluation)
+	ctx, cancel := context.WithCancel(context.Background())
+
+	if opts.MaxTime != 0 {
+		ctx, cancel = context.WithTimeout(ctx, opts.MaxTime)
+	}
 
 	go func() {
 		defer close(ch)
@@ -41,20 +75,36 @@ func SearchBestMove(ctx context.Context, p *Position) chan Evaluation {
 			move := pickMove(entries)
 			ch <- Evaluation{
 				Depth: 1,
-				Best:  move.String(),
+				Best:  move,
 			}
 			return
 		}
 
-		depth := 5
-		eval, m := negamax(p, -Inf, Inf, depth, 0)
-		ch <- Evaluation{
-			Depth: depth,
-			Best:  m.String(),
-			Score: eval,
+		searchCtx := &searchCtx{ctx: ctx, maxNodes: opts.MaxNodes}
+
+		alpha := -Inf
+		beta := Inf
+	loop:
+		for depth := 1; depth <= opts.MaxDepth; depth++ {
+			moves := make([]Move, 0, 1024)
+
+			eval, m := negamax(searchCtx, p, moves, alpha, beta, depth, 0)
+			ch <- Evaluation{
+				Depth: depth,
+				Best:  m,
+				Score: eval,
+			}
+
+			// check for context cancellation
+			select {
+			case <-ctx.Done():
+				break loop
+			default:
+			}
 		}
 	}()
-	return ch
+
+	return ch, cancel
 }
 
 // negamax performs a recursive negamax search with Alpha-Beta pruning from
@@ -68,16 +118,16 @@ func SearchBestMove(ctx context.Context, p *Position) chan Evaluation {
 // moves; stalemate when there are no legal moves and the king is not in
 // check. Both are handled before recursing so that eval is never called on
 // a terminal position.
-func negamax(p *Position, alpha, beta, depth, ply int) (int, Move) {
+func negamax(ctx *searchCtx, p *Position, moves []Move, alpha, beta, depth, ply int) (int, Move) {
 	if depth == 0 {
-		return quiescence(p, alpha, beta), Move(0)
+		return quiescence(ctx, p, moves, alpha, beta), Move(0)
 	}
 
 	//FIXME: pass moves to avoid allocations
-	moves := make([]Move, 0, 218)
 	moves, inCheck := LegalMoves(moves, p)
+	count := len(moves)
 
-	if len(moves) == 0 {
+	if count == 0 {
 		if inCheck {
 			return -MateScore + ply, Move(0)
 		} else {
@@ -85,15 +135,32 @@ func negamax(p *Position, alpha, beta, depth, ply int) (int, Move) {
 		}
 	}
 
-	bestScore := math.MinInt
+	bestScore := -Inf
 	best := moves[0]
 
 	var newPos Position
 
+loop:
 	for _, m := range moves {
+
+		// abort if we exceed the number of nodes
+		ctx.nodes++
+		if ctx.nodes > ctx.maxNodes {
+			break
+		}
+
+		// abort if context has been cancelled
+		if ctx.nodes%2048 == 0 {
+			select {
+			case <-ctx.ctx.Done():
+				break loop
+			default:
+			}
+		}
+
 		newPos = *p
 		newPos.Do(m)
-		score, _ := negamax(&newPos, -beta, -alpha, depth-1, ply+1)
+		score, _ := negamax(ctx, &newPos, moves[count:], -beta, -alpha, depth-1, ply+1)
 		score = -score
 
 		if score > bestScore {
@@ -112,8 +179,8 @@ func negamax(p *Position, alpha, beta, depth, ply int) (int, Move) {
 	return bestScore, best
 }
 
-func quiescence(p *Position, alpha, beta int) int {
-	score := evalPesto(p)
+func quiescence(ctx *searchCtx, p *Position, moves []Move, alpha, beta int) int {
+	score := EvalPesto(p)
 
 	if score >= beta {
 		return beta
@@ -122,16 +189,33 @@ func quiescence(p *Position, alpha, beta int) int {
 		alpha = score
 	}
 
-	moves := make([]Move, 0, 32)
 	moves, _ = CaptureMoves(moves, p)
-
+	count := len(moves)
 	var newPos Position
 
+loop:
 	for _, m := range moves {
+
+		// abort if max nodes
+		ctx.nodes++
+		ctx.qnodes++
+		if ctx.nodes > ctx.maxNodes {
+			break
+		}
+
+		// abort if context has been cancelled
+		if ctx.nodes%2048 == 0 {
+			select {
+			case <-ctx.ctx.Done():
+				break loop
+			default:
+			}
+		}
+
 		newPos = *p
 		newPos.Do(m)
 
-		score := -quiescence(&newPos, -beta, -alpha)
+		score := -quiescence(ctx, &newPos, moves[count:], -beta, -alpha)
 
 		if score >= beta {
 			return beta
@@ -151,7 +235,7 @@ func quiescence(p *Position, alpha, beta int) int {
 // Piece values:
 //
 //	Pawn=100  Knight=300  Bishop=300  Rook=500  Queen=900
-func eval(p *Position) int {
+func EvalMaterial(p *Position) int {
 	pawns := p.Pawns().OnesCount()
 	knight := p.Knights().OnesCount()
 	bishop := p.Bishops().OnesCount()
@@ -359,7 +443,7 @@ func init() {
 	}
 }
 
-func evalPesto(p *Position) int {
+func EvalPesto(p *Position) int {
 	var mg [2]int
 	var eg [2]int
 	gamePhase := 0

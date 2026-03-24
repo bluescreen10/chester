@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"context"
 	"fmt"
 	"os"
 	"os/signal"
@@ -171,15 +170,13 @@ func (s *UCIServer) handleGo(args []string) {
 		return
 	}
 
-	ctx, f := context.WithCancel(context.Background())
-	s.stopFunc = f
-
 	go func() {
 		pos := *s.pos
-		ch := chester.SearchBestMove(ctx, &pos)
+		ch, stopFunc := chester.SearchBestMove(&pos, nil)
+		s.stopFunc = stopFunc
 		for e := range ch {
 			s.info("depth %d score cp %d pv %s", e.Depth, e.Score, e.Best)
-			s.bestMove = e.Best
+			s.bestMove = e.Best.String()
 		}
 
 		s.WriteString("bestmove %s", s.bestMove)
