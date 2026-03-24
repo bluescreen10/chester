@@ -70,7 +70,7 @@ func SearchBestMove(ctx context.Context, p *Position) chan Evaluation {
 // a terminal position.
 func negamax(p *Position, alpha, beta, depth, ply int) (int, Move) {
 	if depth == 0 {
-		return evalPesto(p), Move(0)
+		return quiescence(p, alpha, beta), Move(0)
 	}
 	moves := make([]Move, 0, 218)
 	moves, inCheck := LegalMoves(moves, p)
@@ -108,6 +108,38 @@ func negamax(p *Position, alpha, beta, depth, ply int) (int, Move) {
 		}
 	}
 	return bestScore, best
+}
+
+func quiescence(p *Position, alpha, beta int) int {
+	score := evalPesto(p)
+
+	if score >= beta {
+		return beta
+	}
+	if score > alpha {
+		alpha = score
+	}
+
+	moves := make([]Move, 0, 32)
+	moves, _ = CaptureMoves(moves, p)
+
+	var newPos Position
+
+	for _, m := range moves {
+		newPos = *p
+		newPos.Do(m)
+
+		score := -quiescence(&newPos, -beta, -alpha)
+
+		if score >= beta {
+			return beta
+		}
+		if score > alpha {
+			alpha = score
+		}
+	}
+
+	return alpha
 }
 
 // eval returns a static evaluation of position p in centipawns

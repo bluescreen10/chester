@@ -725,14 +725,14 @@ func TestCaptureOnlyMoves(t *testing.T) {
 		}
 		var moves []chester.Move
 		var got []string
-		moves, _ = chester.CaptureOnly(moves, p)
+		moves, _ = chester.CaptureMoves(moves, p)
 		for _, move := range moves {
 			got = append(got, move.String())
 		}
 		slices.Sort(got)
 
 		if !slices.Equal(got, test.expected) {
-			t.Fatalf("CaptureOnly(%s) got(%d) %s, want(%d) %s", test.fen, len(got), got, len(test.expected), test.expected)
+			t.Fatalf("CaptureMoves(%s) got(%d) %s, want(%d) %s", test.fen, len(got), got, len(test.expected), test.expected)
 		}
 	}
 }

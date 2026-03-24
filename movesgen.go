@@ -50,7 +50,7 @@ func LegalMoves(moves []Move, p *Position) ([]Move, bool) {
 	return legalMoves(moves, p, false)
 }
 
-// CaptureOnly appends all legal **capture moves** for the active color in
+// CaptureMoves appends all legal **capture moves** for the active color in
 // the position p to the moves slice and returns the updated slice. The
 // second return value indicates whether the active king is currently in check.
 //
@@ -62,7 +62,7 @@ func LegalMoves(moves []Move, p *Position) ([]Move, bool) {
 //   - Pinned pieces can only capture along their pin ray.
 //   - En passant captures are included if legal and do not expose the king
 //     to check.
-func CaptureOnly(moves []Move, p *Position) ([]Move, bool) {
+func CaptureMoves(moves []Move, p *Position) ([]Move, bool) {
 	return legalMoves(moves, p, true)
 }
 
