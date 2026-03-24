@@ -47,17 +47,45 @@ type checkersPinsAndMask struct {
 // restricts all other pieces via moveMask. When not in check, moveMask
 // is set to EnemiesOrEmpty and all piece generators run.
 func LegalMoves(moves []Move, p *Position) ([]Move, bool) {
+	return legalMoves(moves, p, false)
+}
+
+// CaptureOnly appends all legal **capture moves** for the active color in
+// the position p to the moves slice and returns the updated slice. The
+// second return value indicates whether the active king is currently in check.
+//
+// Capture-only generation respects the same rules as LegalMoves:
+//   - Double check: only king moves are generated, but only captures
+//     (seldom relevant, usually king captures if available).
+//   - Single check: only captures that resolve the check or along the
+//     check ray are generated.
+//   - Pinned pieces can only capture along their pin ray.
+//   - En passant captures are included if legal and do not expose the king
+//     to check.
+func CaptureOnly(moves []Move, p *Position) ([]Move, bool) {
+	return legalMoves(moves, p, true)
+}
+
+// generate legal moves, if the captureOnly flag is set to true it
+// will only generate capture moves only.
+func legalMoves(moves []Move, p *Position, captureOnly bool) ([]Move, bool) {
 	cpm := checkersPinsAndMask{}
 	numCheckers := checkersAndPinned(p, &cpm)
 	inCheck := true
 
 	switch numCheckers {
 	case 0:
-		cpm.moveMask = p.EnemiesOrEmpty()
+		if captureOnly {
+			cpm.moveMask = p.Enemies()
+		} else {
+			cpm.moveMask = p.EnemiesOrEmpty()
+		}
 		inCheck = false
 		fallthrough
 	case 1:
-		moves = genPawnForwardMoves(moves, p, cpm)
+		if !captureOnly {
+			moves = genPawnForwardMoves(moves, p, cpm)
+		}
 		moves = genPawnLeftAttackMoves(moves, p, cpm)
 		moves = genPawnRightAttackMoves(moves, p, cpm)
 
@@ -70,7 +98,7 @@ func LegalMoves(moves []Move, p *Position) ([]Move, bool) {
 		moves = genQueenMoves(moves, p, cpm)
 		fallthrough
 	default:
-		moves = genKingMoves(moves, p)
+		moves = genKingMoves(moves, p, captureOnly)
 	}
 	return moves, inCheck
 }
@@ -106,11 +134,13 @@ func checkersAndPinned(p *Position, cpm *checkersPinsAndMask) int {
 
 	var sq Square
 
+	occupied := p.Occupied()
+
 	for potentialCheckers := diagonalAttackers & kingDiagonalRays; potentialCheckers != 0; {
 		sq, potentialCheckers = potentialCheckers.PopLSB()
 
 		path := lineFromTo[kingSq][sq]
-		potentialyPinned := path & p.Occupied()
+		potentialyPinned := path & occupied
 		if potentialyPinned != 0 {
 			switch potentialyPinned.OnesCount() {
 			case 1:
@@ -129,7 +159,7 @@ func checkersAndPinned(p *Position, cpm *checkersPinsAndMask) int {
 		sq, potentialCheckers = potentialCheckers.PopLSB()
 
 		path := lineFromTo[kingSq][sq]
-		potentialyPinned := path & p.Occupied()
+		potentialyPinned := path & occupied
 		if potentialyPinned != 0 {
 			switch potentialyPinned.OnesCount() {
 			case 1:
@@ -523,13 +553,20 @@ func genQueenMoves(moves []Move, p *Position, cpm checkersPinsAndMask) []Move {
 // color. The full enemy attack map is computed and subtracted from candidate
 // targets. Castling is only added when the rights flag is set, the path is
 // unoccupied, and no square the king crosses is under attack.
-func genKingMoves(moves []Move, p *Position) []Move {
+func genKingMoves(moves []Move, p *Position, captureOnly bool) []Move {
 	us := p.Active()
 	king := p.King()
-	enemiesOrEmpty := p.EnemiesOrEmpty()
+
+	var mask Bitboard
+	if captureOnly {
+		mask = p.Enemies()
+	} else {
+		mask = p.EnemiesOrEmpty()
+	}
+
 	from, _ := king.PopLSB()
 
-	potentialTargets := kingMoves[from] & enemiesOrEmpty
+	potentialTargets := kingMoves[from] & mask
 
 	if potentialTargets == 0 {
 		return moves

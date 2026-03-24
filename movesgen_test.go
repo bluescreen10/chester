@@ -677,3 +677,62 @@ func diff(expected, got []string) []string {
 
 	return diff
 }
+
+func TestCaptureOnlyMoves(t *testing.T) {
+	tests := []struct {
+		fen      string
+		expected []string
+	}{
+		{
+			fen:      "r3k2r/ppp2ppp/8/3R4/8/8/PPP2PPP/R3K2R b KQkq - 0 1",
+			expected: []string{},
+		},
+
+		{
+			fen: "rnbqkbnr/ppp2ppp/8/3N4/8/8/PPP2PPP/R1BQKBNR b KQkq - 0 1",
+			expected: []string{
+				"d8d5",
+			},
+		},
+
+		{
+			fen: "k7/8/8/8/2pP4/8/8/K7 b - d3 0 1",
+			expected: []string{
+				"c4d3",
+			},
+		},
+
+		{
+			fen: "K7/8/8/3R4/3k4/8/8/8 b - - 0 1",
+			expected: []string{
+				"d4d5",
+			},
+		},
+
+		{
+			fen: "r2qkbnr/ppp1pppp/3pb3/4N3/2PP4/1P6/P3PPPP/R1BQKBNR b KQkq - 0 3",
+			expected: []string{
+				"d6e5",
+				"e6c4",
+			},
+		},
+	}
+
+	for _, test := range tests {
+		p, err := chester.ParseFEN(test.fen)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var moves []chester.Move
+		var got []string
+		moves, _ = chester.CaptureOnly(moves, p)
+		for _, move := range moves {
+			got = append(got, move.String())
+		}
+		slices.Sort(got)
+
+		if !slices.Equal(got, test.expected) {
+			t.Fatalf("CaptureOnly(%s) got(%d) %s, want(%d) %s", test.fen, len(got), got, len(test.expected), test.expected)
+		}
+	}
+}
