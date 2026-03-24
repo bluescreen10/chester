@@ -646,6 +646,14 @@ func (p *Position) Hash() uint64 {
 	return p.hash
 }
 
+func (p *Position) WhitePieces() Bitboard {
+	return p.allPieces[White]
+}
+
+func (p *Position) BlackPieces() Bitboard {
+	return p.allPieces[Black]
+}
+
 // adjacentPawns reports whether any pawn of the given color occupies a square
 // horizontally adjacent to sq. Used to determine whether the en passant file
 // should be included in the Zobrist hash.
