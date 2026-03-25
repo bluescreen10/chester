@@ -2,6 +2,7 @@ package chester
 
 import (
 	"context"
+	"errors"
 	"math"
 	"math/rand/v2"
 	"time"
@@ -25,16 +26,50 @@ type Evaluation struct {
 	Score int
 }
 
+// EvalFunc defines the signature for a function that performs a static
+// evaluation of a [Position].
+//
+// It returns a score in centipawns (100 units = 1 pawn) from the perspective
+// of the side to move. A positive value indicates an advantage for the
+// active player, while a negative value indicates a disadvantage.
 type EvalFunc func(*Position) int
 
+// SearchOptions defines the constraints and heuristics used by the search engine
+// to determine the best move. It allows for limiting the search by time,
+// node count, or recursion depth.
 type SearchOptions struct {
-	MaxTime  time.Duration
+	// MaxTime is the maximum duration the search is allowed to run.
+	// If the timer expires, the search returns the best move found
+	// from the last fully completed depth.
+	MaxTime time.Duration
+
+	// MaxNodes is the maximum number of positions (nodes) the engine
+	// will visit before aborting the search.
 	MaxNodes int64
+
+	// MaxDepth is the maximum number of plies (half-moves) to search.
 	MaxDepth int
-	Moves    []Move
+
+	// Moves is an optional list of specific moves to search. If empty,
+	// the engine considers all legal moves in the position.
+	Moves []Move
+
+	// EvalFunc is the evaluation function used to score leaf nodes
+	// in the search tree.
 	EvalFunc EvalFunc
 }
 
+var (
+	// errMaxNodesReached is returned when the search is aborted because the
+	// total number of visited nodes exceeds [SearchOptions.MaxNodes].
+	errMaxNodesReached = errors.New("max nodes reached")
+
+	// errContextCancelled is returned when the search is aborted due to
+	// a timeout or a manual cancellation of the [context.Context].
+	errContextCancelled = errors.New("context cancelled")
+)
+
+// defaultSearchOptions provides a sensible baseline for the engine.
 var defaultSearchOptions = &SearchOptions{
 	MaxTime:  time.Duration(20 * time.Second),
 	MaxNodes: math.MaxInt64,
@@ -42,20 +77,29 @@ var defaultSearchOptions = &SearchOptions{
 	EvalFunc: EvalPesto,
 }
 
+// searchCtx tracks the state and constraints of a single search execution.
+// It embeds [context.Context] for cancellation signaling and maintains
+// counters for performance monitoring.
 type searchCtx struct {
-	ctx      context.Context
+
+	// Context is used to signal search abortion (timeout or manual).
+	context.Context
+
+	// maxNodes is the hard limit for total nodes allowed for this search.
 	maxNodes int64
-	nodes    int64
-	qnodes   int64
+
+	// nodes tracks the total number of positions visited during
+	// the main negamax search.
+	nodes int64
+
+	// qnodes tracks the number of positions visited specifically
+	// during the quiescence search.
+	qnodes int64
 }
 
 // SearchBestMove searches for the best move in position p and sends the
 // result on the returned channel, which is closed when the search completes.
-// The search runs in a separate goroutine and respects ctx for cancellation.
-//
-// If the position is found in the opening book the book move is returned
-// immediately at depth 1 with no score. Otherwise a fixed-depth negamax
-// search with Alpha-Beta pruning is performed.
+// Additionally a cancel func is returned to stop the search.
 func SearchBestMove(p *Position, opts *SearchOptions) (chan Evaluation, context.CancelFunc) {
 	if opts == nil {
 		opts = defaultSearchOptions
@@ -80,7 +124,7 @@ func SearchBestMove(p *Position, opts *SearchOptions) (chan Evaluation, context.
 			return
 		}
 
-		searchCtx := &searchCtx{ctx: ctx, maxNodes: opts.MaxNodes}
+		searchCtx := &searchCtx{Context: ctx, maxNodes: opts.MaxNodes}
 
 		alpha := -Inf
 		beta := Inf
@@ -88,7 +132,11 @@ func SearchBestMove(p *Position, opts *SearchOptions) (chan Evaluation, context.
 		for depth := 1; depth <= opts.MaxDepth; depth++ {
 			moves := make([]Move, 0, 1024)
 
-			eval, m := negamax(searchCtx, p, moves, alpha, beta, depth, 0)
+			eval, m, err := negamax(searchCtx, p, moves, alpha, beta, depth, 0)
+			if err != nil {
+				break
+			}
+
 			ch <- Evaluation{
 				Depth: depth,
 				Best:  m,
@@ -118,20 +166,20 @@ func SearchBestMove(p *Position, opts *SearchOptions) (chan Evaluation, context.
 // moves; stalemate when there are no legal moves and the king is not in
 // check. Both are handled before recursing so that eval is never called on
 // a terminal position.
-func negamax(ctx *searchCtx, p *Position, moves []Move, alpha, beta, depth, ply int) (int, Move) {
+func negamax(ctx *searchCtx, p *Position, moves []Move, alpha, beta, depth, ply int) (int, Move, error) {
 	if depth == 0 {
-		return quiescence(ctx, p, moves, alpha, beta), Move(0)
+		score, err := quiescence(ctx, p, moves, alpha, beta)
+		return score, Move(0), err
 	}
 
-	//FIXME: pass moves to avoid allocations
 	moves, inCheck := LegalMoves(moves, p)
 	count := len(moves)
 
 	if count == 0 {
 		if inCheck {
-			return -MateScore + ply, Move(0)
+			return -MateScore + ply, Move(0), nil
 		} else {
-			return 0, Move(0)
+			return 0, Move(0), nil
 		}
 	}
 
@@ -140,27 +188,31 @@ func negamax(ctx *searchCtx, p *Position, moves []Move, alpha, beta, depth, ply 
 
 	var newPos Position
 
-loop:
 	for _, m := range moves {
 
 		// abort if we exceed the number of nodes
 		ctx.nodes++
 		if ctx.nodes > ctx.maxNodes {
-			break
+			return 0, Move(0), errMaxNodesReached
 		}
 
 		// abort if context has been cancelled
 		if ctx.nodes%2048 == 0 {
 			select {
-			case <-ctx.ctx.Done():
-				break loop
+			case <-ctx.Done():
+				return 0, Move(0), errContextCancelled
 			default:
 			}
 		}
 
 		newPos = *p
 		newPos.Do(m)
-		score, _ := negamax(ctx, &newPos, moves[count:], -beta, -alpha, depth-1, ply+1)
+		score, _, err := negamax(ctx, &newPos, moves[count:], -beta, -alpha, depth-1, ply+1)
+
+		if err != nil {
+			return 0, Move(0), err
+		}
+
 		score = -score
 
 		if score > bestScore {
@@ -176,14 +228,24 @@ loop:
 			break
 		}
 	}
-	return bestScore, best
+	return bestScore, best, nil
 }
 
-func quiescence(ctx *searchCtx, p *Position, moves []Move, alpha, beta int) int {
+// quiescence performs a restricted search that only considers "noisy" moves
+// (captures) until a "quiet" position is reached.
+//
+// This is critical for avoiding the "Horizon Effect," where the engine
+// might misjudge a position because the main search depth ended
+// right in the middle of a piece exchange.
+//
+// It returns a score that represents the settled value of the position.
+// If the search is interrupted by a timeout or node limit, it returns
+// an error to ensure the partial result is discarded.
+func quiescence(ctx *searchCtx, p *Position, moves []Move, alpha, beta int) (int, error) {
 	score := EvalPesto(p)
 
 	if score >= beta {
-		return beta
+		return beta, nil
 	}
 	if score > alpha {
 		alpha = score
@@ -193,21 +255,20 @@ func quiescence(ctx *searchCtx, p *Position, moves []Move, alpha, beta int) int 
 	count := len(moves)
 	var newPos Position
 
-loop:
 	for _, m := range moves {
 
 		// abort if max nodes
 		ctx.nodes++
 		ctx.qnodes++
 		if ctx.nodes > ctx.maxNodes {
-			break
+			return 0, errMaxNodesReached
 		}
 
 		// abort if context has been cancelled
 		if ctx.nodes%2048 == 0 {
 			select {
-			case <-ctx.ctx.Done():
-				break loop
+			case <-ctx.Done():
+				return 0, errContextCancelled
 			default:
 			}
 		}
@@ -215,17 +276,23 @@ loop:
 		newPos = *p
 		newPos.Do(m)
 
-		score := -quiescence(ctx, &newPos, moves[count:], -beta, -alpha)
+		score, err := quiescence(ctx, &newPos, moves[count:], -beta, -alpha)
+
+		if err != nil {
+			return 0, err
+		}
+
+		score = -score
 
 		if score >= beta {
-			return beta
+			return beta, nil
 		}
 		if score > alpha {
 			alpha = score
 		}
 	}
 
-	return alpha
+	return alpha, nil
 }
 
 // eval returns a static evaluation of position p in centipawns
@@ -443,6 +510,17 @@ func init() {
 	}
 }
 
+// EvalPesto calculates a static evaluation of the given [Position] using
+// the PeSTO (Pietro Simone's Table-only) method.
+//
+// It utilizes Tapered Evaluation, which calculates separate scores for the
+// midgame and endgame based on Piece-Square Tables (PST). These scores
+// are then linearly interpolated based on the current game phase,
+// determined by the remaining material on the board.
+//
+// PeSTO is highly efficient as it provides sophisticated positional
+// awareness (like king safety and pawn structure) purely through
+// table lookups without the need for complex tactical logic.
 func EvalPesto(p *Position) int {
 	var mg [2]int
 	var eg [2]int

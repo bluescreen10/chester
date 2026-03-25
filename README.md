@@ -28,6 +28,9 @@ A chess library and engine written in Go.
 - PeSTO evaluation function
 - Opening book support (Polyglot `.bin` format)
 
+## Demo
+Play against [Chester](https://lichess.org/@/chester-bot) in lichess.
+
 ## Installation
 
 ```bash
