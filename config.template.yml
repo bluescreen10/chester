@@ -6,6 +6,7 @@ engine:
   cmd: chester
   dir: "/lichess-bot"
   protocol: uci
+  debug: true
 
 challenge:
   accept_bot: true

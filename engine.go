@@ -115,14 +115,14 @@ func SearchBestMove(p *Position, opts *SearchOptions) (chan Evaluation, context.
 	go func() {
 		defer close(ch)
 
-		// if entries, ok := book[p.hash]; ok {
-		// 	move := pickMove(entries)
-		// 	ch <- Evaluation{
-		// 		Depth: 1,
-		// 		Best:  move,
-		// 	}
-		// 	return
-		// }
+		if entries, ok := book[p.hash]; ok {
+			move := pickMove(entries)
+			ch <- Evaluation{
+				Depth: 1,
+				Best:  move,
+			}
+			return
+		}
 
 		rootMoves := make([]Move, 0, 1024)
 		newPos := Position{}

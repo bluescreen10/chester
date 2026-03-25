@@ -172,7 +172,7 @@ func (s *UCIServer) handleGo(args []string) {
 	}
 
 	opts := &chester.SearchOptions{
-		MaxDepth: 5,
+		MaxDepth: 100,
 		MaxNodes: math.MaxInt64,
 	}
 
