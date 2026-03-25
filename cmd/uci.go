@@ -265,7 +265,11 @@ func (s *UCIServer) handlePerft(args []string) {
 			s.WriteString("%s: %d", m.Move, m.Count)
 		}
 		duration := time.Since(start)
-		s.WriteString("perft %d in %s\n", nodes, duration)
+		nps := float32(nodes) / float32(duration.Seconds())
+
+		s.WriteString("\nNodes: %d", nodes)
+		s.WriteString("Time: %s", duration.Round(time.Millisecond))
+		s.WriteString("NPS: %s\n", formatNPS(nps))
 	}()
 }
 
@@ -336,4 +340,15 @@ func calculateTimeLimit(color chester.Color, wtime, btime, winc, binc, movestogo
 	}
 
 	return time.Duration(targetMs) * time.Millisecond
+}
+
+func formatNPS(nps float32) string {
+	switch {
+	case nps >= 1_000_000:
+		return fmt.Sprintf("%.2f MNPS", nps/1_000_000)
+	case nps >= 1_000:
+		return fmt.Sprintf("%.1f kNPS", nps/1_000)
+	default:
+		return fmt.Sprintf("%.0f NPS", nps)
+	}
 }
