@@ -118,6 +118,10 @@ func SearchBestMove(p *Position, opts *SearchOptions) (chan Evaluation, context.
 		ctx, cancel = context.WithTimeout(ctx, opts.MaxTime)
 	}
 
+	if opts.MaxNodes == 0 {
+		opts.MaxNodes = math.MaxInt
+	}
+
 	go func() {
 		defer close(ch)
 
@@ -302,6 +306,7 @@ func negamax(ctx *searchCtx, p *Position, moves []Move, alpha, beta, depth, ply 
 		}
 	}
 
+	// transposition table enabled
 	if ctx.tt != nil {
 		flag := exact
 		if bestScore <= originalAlpha {
