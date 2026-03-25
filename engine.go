@@ -115,32 +115,62 @@ func SearchBestMove(p *Position, opts *SearchOptions) (chan Evaluation, context.
 	go func() {
 		defer close(ch)
 
-		if entries, ok := book[p.hash]; ok {
-			move := pickMove(entries)
-			ch <- Evaluation{
-				Depth: 1,
-				Best:  move,
-			}
-			return
+		// if entries, ok := book[p.hash]; ok {
+		// 	move := pickMove(entries)
+		// 	ch <- Evaluation{
+		// 		Depth: 1,
+		// 		Best:  move,
+		// 	}
+		// 	return
+		// }
+
+		rootMoves := make([]Move, 0, 1024)
+		newPos := Position{}
+
+		rootMoves, _ = LegalMoves(rootMoves, p)
+		if len(opts.Moves) > 0 {
+			rootMoves = filterMoves(rootMoves, opts.Moves)
 		}
 
+		count := len(rootMoves)
 		searchCtx := &searchCtx{Context: ctx, maxNodes: opts.MaxNodes}
 
-		alpha := -Inf
-		beta := Inf
 	loop:
+		// iterative deepening
 		for depth := 1; depth <= opts.MaxDepth; depth++ {
-			moves := make([]Move, 0, 1024)
+			bestMoveAtDepth := Move(0)
+			bestScoreAtDepth := -Inf
+			alpha := -Inf
+			beta := Inf
 
-			eval, m, err := negamax(searchCtx, p, moves, alpha, beta, depth, 0)
-			if err != nil {
-				break
+			// evaluate each root move
+			for _, m := range rootMoves {
+
+				newPos = *p
+				newPos.Do(m)
+
+				score, err := negamax(searchCtx, &newPos, rootMoves[count:], -beta, -alpha, depth-1, 1)
+				if err != nil {
+					break loop
+				}
+				score = -score
+
+				if score > bestScoreAtDepth {
+					bestScoreAtDepth = score
+					bestMoveAtDepth = m
+
+					if score > alpha {
+						alpha = score
+					}
+				}
+
 			}
 
+			// inform the current evaluation
 			ch <- Evaluation{
 				Depth: depth,
-				Best:  m,
-				Score: eval,
+				Best:  bestMoveAtDepth,
+				Score: bestScoreAtDepth,
 			}
 
 			// check for context cancellation
@@ -155,6 +185,24 @@ func SearchBestMove(p *Position, opts *SearchOptions) (chan Evaluation, context.
 	return ch, cancel
 }
 
+func filterMoves(allMoves []Move, wantMoves []Move) []Move {
+	existing := make(map[Move]bool)
+
+	for _, m := range allMoves {
+		existing[m] = true
+	}
+
+	var j int
+	for _, m := range wantMoves {
+		if _, ok := existing[m]; ok {
+			allMoves[j] = m
+			j++
+		}
+	}
+
+	return allMoves[:j]
+}
+
 // negamax performs a recursive negamax search with Alpha-Beta pruning from
 // position p. It returns the best score achievable and the corresponding
 // move. alpha and beta are the current window bounds; depth is the remaining
@@ -166,10 +214,9 @@ func SearchBestMove(p *Position, opts *SearchOptions) (chan Evaluation, context.
 // moves; stalemate when there are no legal moves and the king is not in
 // check. Both are handled before recursing so that eval is never called on
 // a terminal position.
-func negamax(ctx *searchCtx, p *Position, moves []Move, alpha, beta, depth, ply int) (int, Move, error) {
+func negamax(ctx *searchCtx, p *Position, moves []Move, alpha, beta, depth, ply int) (int, error) {
 	if depth == 0 {
-		score, err := quiescence(ctx, p, moves, alpha, beta)
-		return score, Move(0), err
+		return quiescence(ctx, p, moves, alpha, beta)
 	}
 
 	moves, inCheck := LegalMoves(moves, p)
@@ -177,14 +224,13 @@ func negamax(ctx *searchCtx, p *Position, moves []Move, alpha, beta, depth, ply 
 
 	if count == 0 {
 		if inCheck {
-			return -MateScore + ply, Move(0), nil
+			return -MateScore + ply, nil
 		} else {
-			return 0, Move(0), nil
+			return 0, nil
 		}
 	}
 
 	bestScore := -Inf
-	best := moves[0]
 
 	var newPos Position
 
@@ -193,31 +239,30 @@ func negamax(ctx *searchCtx, p *Position, moves []Move, alpha, beta, depth, ply 
 		// abort if we exceed the number of nodes
 		ctx.nodes++
 		if ctx.nodes > ctx.maxNodes {
-			return 0, Move(0), errMaxNodesReached
+			return 0, errMaxNodesReached
 		}
 
 		// abort if context has been cancelled
 		if ctx.nodes%2048 == 0 {
 			select {
 			case <-ctx.Done():
-				return 0, Move(0), errContextCancelled
+				return 0, errContextCancelled
 			default:
 			}
 		}
 
 		newPos = *p
 		newPos.Do(m)
-		score, _, err := negamax(ctx, &newPos, moves[count:], -beta, -alpha, depth-1, ply+1)
+		score, err := negamax(ctx, &newPos, moves[count:], -beta, -alpha, depth-1, ply+1)
 
 		if err != nil {
-			return 0, Move(0), err
+			return 0, err
 		}
 
 		score = -score
 
 		if score > bestScore {
 			bestScore = score
-			best = m
 		}
 
 		if score > alpha {
@@ -228,7 +273,7 @@ func negamax(ctx *searchCtx, p *Position, moves []Move, alpha, beta, depth, ply 
 			break
 		}
 	}
-	return bestScore, best, nil
+	return bestScore, nil
 }
 
 // quiescence performs a restricted search that only considers "noisy" moves
@@ -251,6 +296,7 @@ func quiescence(ctx *searchCtx, p *Position, moves []Move, alpha, beta int) (int
 		alpha = score
 	}
 
+	//FIXME: it should be captures and promotions
 	moves, _ = CaptureMoves(moves, p)
 	count := len(moves)
 	var newPos Position

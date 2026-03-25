@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"math"
 	"os"
 	"os/signal"
 	"runtime/pprof"
@@ -170,15 +171,61 @@ func (s *UCIServer) handleGo(args []string) {
 		return
 	}
 
+	opts := &chester.SearchOptions{
+		MaxDepth: 5,
+		MaxNodes: math.MaxInt64,
+	}
+
+	var wtime, btime, winc, binc, movestogo, movetime int64
+
+	// parse go arguments
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "depth":
+			i++
+			fmt.Sscanf(args[i], "%d", &opts.MaxDepth)
+		case "nodes":
+			i++
+			fmt.Sscanf(args[i], "%d", &opts.MaxNodes)
+		case "movetime":
+			i++
+			fmt.Sscanf(args[i], "%d", &movetime)
+			opts.MaxTime = time.Duration(movetime) * time.Millisecond
+		case "wtime":
+			i++
+			fmt.Sscanf(args[i], "%d", &wtime)
+		case "btime":
+			i++
+			fmt.Sscanf(args[i], "%d", &btime)
+		case "winc":
+			i++
+			fmt.Sscanf(args[i], "%d", &winc)
+		case "binc":
+			i++
+			fmt.Sscanf(args[i], "%d", &binc)
+		case "movestogo":
+			i++
+			fmt.Sscanf(args[i], "%d", &movestogo)
+		case "infinite":
+			opts.MaxTime = 0
+			opts.MaxDepth = 100
+		}
+	}
+
+	if opts.MaxTime == 0 && (wtime > 0 || btime > 0) {
+		opts.MaxTime = calculateTimeLimit(s.pos.Active(), wtime, btime, winc, binc, movestogo)
+	}
+
 	go func() {
 		pos := *s.pos
-		ch, stopFunc := chester.SearchBestMove(&pos, nil)
+		ch, stopFunc := chester.SearchBestMove(&pos, opts)
 		s.stopFunc = stopFunc
 		for e := range ch {
 			s.info("depth %d score cp %d pv %s", e.Depth, e.Score, e.Best)
 			s.bestMove = e.Best.String()
 		}
 
+		s.stopFunc = nil
 		s.WriteString("bestmove %s", s.bestMove)
 	}()
 }
@@ -191,10 +238,6 @@ func (s *UCIServer) handleStop() {
 	if s.stopFunc != nil {
 		s.stopFunc()
 		s.stopFunc = nil
-	}
-
-	if s.bestMove != "" {
-		s.WriteString("bestmove %s", s.bestMove)
 	}
 }
 
@@ -269,4 +312,26 @@ func (s *UCIServer) resetPosition() {
 		s.error("error parsing fen: %s", err)
 	}
 	s.pos = pos
+}
+
+func calculateTimeLimit(color chester.Color, wtime, btime, winc, binc, movestogo int64) time.Duration {
+	var timeLeft, inc int64
+
+	if color == chester.White {
+		timeLeft, inc = wtime, winc
+	} else {
+		timeLeft, inc = btime, binc
+	}
+
+	if movestogo <= 0 {
+		movestogo = 30
+	}
+
+	targetMs := (timeLeft / movestogo) + int64(float64(inc)*0.8)
+
+	if targetMs > timeLeft/2 {
+		targetMs = timeLeft / 2
+	}
+
+	return time.Duration(targetMs) * time.Millisecond
 }
