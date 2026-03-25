@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-VERSION=0.2.3
+VERSION=0.3.0
 IMAGE=bluescreen10/chester
 
 # create build dir

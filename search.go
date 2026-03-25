@@ -57,6 +57,9 @@ type SearchOptions struct {
 	// EvalFunc is the evaluation function used to score leaf nodes
 	// in the search tree.
 	EvalFunc EvalFunc
+
+	// Optionally you can pass a transposition table to be used
+	TranspositionTable *TranspositionTable
 }
 
 var (
@@ -84,6 +87,9 @@ type searchCtx struct {
 
 	// Context is used to signal search abortion (timeout or manual).
 	context.Context
+
+	// tranposition table
+	tt *TranspositionTable
 
 	// maxNodes is the hard limit for total nodes allowed for this search.
 	maxNodes int64
@@ -133,7 +139,12 @@ func SearchBestMove(p *Position, opts *SearchOptions) (chan Evaluation, context.
 		}
 
 		count := len(rootMoves)
-		searchCtx := &searchCtx{Context: ctx, maxNodes: opts.MaxNodes}
+
+		searchCtx := &searchCtx{
+			Context:  ctx,
+			maxNodes: opts.MaxNodes,
+			tt:       opts.TranspositionTable,
+		}
 
 	loop:
 		// iterative deepening
@@ -215,6 +226,22 @@ func filterMoves(allMoves []Move, wantMoves []Move) []Move {
 // check. Both are handled before recursing so that eval is never called on
 // a terminal position.
 func negamax(ctx *searchCtx, p *Position, moves []Move, alpha, beta, depth, ply int) (int, error) {
+
+	// tranposition table enabled
+	var entry ttEntry
+	if ctx.tt != nil {
+		entry = ctx.tt.get(p.hash)
+		if entry.hash == p.hash && int(entry.depth) >= depth {
+			if entry.flag == exact {
+				return entry.score, nil
+			} else if entry.flag == lowerBound && entry.score >= beta {
+				return beta, nil
+			} else if entry.flag == upperBound && entry.score <= alpha {
+				return alpha, nil
+			}
+		}
+	}
+
 	if depth == 0 {
 		return quiescence(ctx, p, moves, alpha, beta)
 	}
@@ -230,6 +257,7 @@ func negamax(ctx *searchCtx, p *Position, moves []Move, alpha, beta, depth, ply 
 		}
 	}
 
+	originalAlpha := alpha
 	bestScore := -Inf
 
 	var newPos Position
@@ -271,6 +299,23 @@ func negamax(ctx *searchCtx, p *Position, moves []Move, alpha, beta, depth, ply 
 
 		if alpha >= beta {
 			break
+		}
+	}
+
+	if ctx.tt != nil {
+		flag := exact
+		if bestScore <= originalAlpha {
+			flag = upperBound
+		} else if bestScore >= beta {
+			flag = lowerBound
+		}
+
+		if entry.hash != p.hash || int(entry.depth) <= depth {
+			entry.hash = p.hash
+			entry.score = bestScore
+			entry.depth = depth
+			entry.flag = flag
+			ctx.tt.set(entry)
 		}
 	}
 	return bestScore, nil

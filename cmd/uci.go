@@ -23,12 +23,13 @@ type UCIServer struct {
 	isCPUProfiling bool
 	CPUProfileFile *os.File
 	isDebugLogging bool
+	tt             *chester.TranspositionTable
 	stopFunc       func()
 }
 
 func startUCI() {
 	pos, _ := chester.ParseFEN(chester.DefaultFEN)
-	uci := &UCIServer{pos: pos}
+	uci := &UCIServer{pos: pos, tt: chester.NewTranspositionTable(64 * 1024 * 1024)}
 	uci.Start()
 }
 
@@ -172,8 +173,9 @@ func (s *UCIServer) handleGo(args []string) {
 	}
 
 	opts := &chester.SearchOptions{
-		MaxDepth: 100,
-		MaxNodes: math.MaxInt64,
+		MaxDepth:           100,
+		MaxNodes:           math.MaxInt64,
+		TranspositionTable: s.tt,
 	}
 
 	var wtime, btime, winc, binc, movestogo, movetime int64

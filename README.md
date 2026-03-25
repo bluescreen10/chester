@@ -24,6 +24,9 @@ A chess library and engine written in Go.
 
 - Universal Chess Interface (UCI)
 - Negamax with Alpha-Beta pruning
+- Tranposition Table
+- Search time / nodes budget
+- Iterative Deepening
 - Quiescence search
 - PeSTO evaluation function
 - Opening book support (Polyglot `.bin` format)
