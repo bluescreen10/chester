@@ -47,7 +47,7 @@ func (s Square) String() string {
 
 // ParseSquare parses an algebraic square name (e.g., "e4") and returns the Square.
 func ParseSquare(s string) (Square, error) {
-	if len(s) < 2 {
+	if len(s) != 2 {
 		return SQ_NULL, fmt.Errorf("invalid Square: %s", s)
 	}
 	rank := int8(s[1] - '1')
