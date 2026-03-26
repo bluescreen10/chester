@@ -9,8 +9,10 @@ import (
 )
 
 const (
-	// Scored used to track available Mates
-	Inf       = 1_000_000_000
+	// Inf is a value representing positive infinity for search scores.
+	Inf = 1_000_000_000
+	// MateScore is the base score for a checkmate. The actual score is
+	// adjusted by ply to favor shorter mates.
 	MateScore = 1_000_000
 )
 
@@ -103,9 +105,8 @@ type searchCtx struct {
 	qnodes int64
 }
 
-// SearchBestMove searches for the best move in position p and sends the
-// result on the returned channel, which is closed when the search completes.
-// Additionally a cancel func is returned to stop the search.
+// SearchBestMove initiates an asynchronous search for the best move.
+// Returns a channel for evaluations and a function to cancel the search.
 func SearchBestMove(p *Position, opts *SearchOptions) (chan Evaluation, context.CancelFunc) {
 	if opts == nil {
 		opts = defaultSearchOptions
@@ -200,6 +201,9 @@ func SearchBestMove(p *Position, opts *SearchOptions) (chan Evaluation, context.
 	return ch, cancel
 }
 
+// filterMoves returns a subset of allMoves that are also present in wantMoves.
+// It preserves the order of moves as they appear in wantMoves, provided they
+// are legal (exist in allMoves).
 func filterMoves(allMoves []Move, wantMoves []Move) []Move {
 	existing := make(map[Move]bool)
 
@@ -608,17 +612,8 @@ func init() {
 	}
 }
 
-// EvalPesto calculates a static evaluation of the given [Position] using
-// the PeSTO (Pietro Simone's Table-only) method.
-//
-// It utilizes Tapered Evaluation, which calculates separate scores for the
-// midgame and endgame based on Piece-Square Tables (PST). These scores
-// are then linearly interpolated based on the current game phase,
-// determined by the remaining material on the board.
-//
-// PeSTO is highly efficient as it provides sophisticated positional
-// awareness (like king safety and pawn structure) purely through
-// table lookups without the need for complex tactical logic.
+// EvalPesto calculates a static evaluation using the PeSTO method.
+// Returns a score in centipawns based on PST and game phase.
 func EvalPesto(p *Position) int {
 	var mg [2]int
 	var eg [2]int

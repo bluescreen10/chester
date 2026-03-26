@@ -16,6 +16,8 @@ import (
 	"github.com/bluescreen10/chester"
 )
 
+// UCIServer handles communication between the chess engine and a UCI-compliant
+// GUI. It manages the engine's state, position, and search execution.
 type UCIServer struct {
 	mutex          sync.Mutex
 	pos            *chester.Position
@@ -27,12 +29,15 @@ type UCIServer struct {
 	stopFunc       func()
 }
 
+// startUCI initializes a standard UCI session.
 func startUCI() {
 	pos, _ := chester.ParseFEN(chester.DefaultFEN)
 	uci := &UCIServer{pos: pos, tt: chester.NewTranspositionTable(64 * 1024 * 1024)}
 	uci.Start()
 }
 
+// Start runs the main loop of the UCI server, reading commands from standard
+// input and dispatching them to the appropriate handlers.
 func (s *UCIServer) Start() {
 	s.info("starting uci server...")
 	c := make(chan os.Signal, 1)
@@ -79,16 +84,21 @@ func (s *UCIServer) Start() {
 	}
 }
 
+// Write sends a raw byte slice to standard output, which is the protocol's
+// communication channel with the GUI.
 func (s *UCIServer) Write(msg []byte) (int, error) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	return os.Stdout.Write(msg)
 }
 
+// WriteString sends a formatted message to the GUI. It automatically appends
+// a newline character.
 func (s *UCIServer) WriteString(msg string, args ...any) {
 	s.Write([]byte(fmt.Sprintf(msg+"\n", args...)))
 }
 
+// debug logs a message to the GUI if debug logging is enabled.
 func (s *UCIServer) debug(msg string, args ...any) {
 	if !s.isDebugLogging {
 		return
@@ -96,24 +106,33 @@ func (s *UCIServer) debug(msg string, args ...any) {
 	s.info("debug: "+msg, args...)
 }
 
+// info sends a standard "info string" message to the GUI.
 func (s *UCIServer) info(msg string, args ...any) {
 	s.WriteString("info string "+msg, args...)
 }
 
+// error sends an error message formatted as an "info string" to the GUI.
 func (s *UCIServer) error(msg string, args ...any) {
 	s.info("error: "+msg, args...)
 }
 
+// handleUCI responds to the "uci" command by identifying the engine and
+// confirming it is ready to use the UCI protocol.
 func (s *UCIServer) handleUCI() {
 	s.WriteString("id name %s", BotName)
 	s.WriteString("id author %s", Author)
 	s.WriteString("uciok")
 }
 
+// handleUCINewGame responds to the "ucinewgame" command by resetting the
+// board to the starting position.
 func (s *UCIServer) handleUCINewGame() {
 	s.resetPosition()
 }
 
+// handlePosition responds to the "position" command, which sets up the board
+// state. It supports both "startpos" and custom "fen" strings, followed by
+// an optional list of "moves" to apply.
 func (s *UCIServer) handlePosition(args []string) {
 	if len(args) < 1 {
 		s.error("position command requires at least 2 arguments")
@@ -166,6 +185,9 @@ func (s *UCIServer) handlePosition(args []string) {
 	}
 }
 
+// handleGo responds to the "go" command, which initiates a search for the
+// best move. It parses search constraints like time, depth, and node limits
+// from the provided arguments.
 func (s *UCIServer) handleGo(args []string) {
 	if len(args) < 1 {
 		s.error("go command requires at least 2 arguments")
@@ -232,10 +254,14 @@ func (s *UCIServer) handleGo(args []string) {
 	}()
 }
 
+// handleIsReady responds to the "isready" command, signaling to the GUI
+// that the engine is ready for further commands.
 func (s *UCIServer) handleIsReady() {
 	s.WriteString("readyok")
 }
 
+// handleStop responds to the "stop" command by immediately aborting any
+// ongoing search.
 func (s *UCIServer) handleStop() {
 	if s.stopFunc != nil {
 		s.stopFunc()
@@ -243,6 +269,8 @@ func (s *UCIServer) handleStop() {
 	}
 }
 
+// handlePerft handles the "perft" command, which runs a performance test
+// at a specified depth to count the number of nodes in the move tree.
 func (s *UCIServer) handlePerft(args []string) {
 	depth := 6
 
@@ -273,6 +301,7 @@ func (s *UCIServer) handlePerft(args []string) {
 	}()
 }
 
+// handleCPUProfile toggles CPU profiling for performance analysis.
 func (s *UCIServer) handleCPUProfile(args []string) {
 	if s.isCPUProfiling {
 		s.info("cpu profiling stopped")
@@ -297,6 +326,7 @@ func (s *UCIServer) handleCPUProfile(args []string) {
 	s.isCPUProfiling = true
 }
 
+// handleDebug toggles detailed debug logging to the GUI.
 func (s *UCIServer) handleDebug(args []string) {
 	if len(args) == 0 {
 		s.isDebugLogging = !s.isDebugLogging
@@ -312,6 +342,7 @@ func (s *UCIServer) handleDebug(args []string) {
 	}
 }
 
+// resetPosition resets the board to the standard starting FEN.
 func (s *UCIServer) resetPosition() {
 	pos, err := chester.ParseFEN(chester.DefaultFEN)
 	if err != nil {
@@ -320,6 +351,8 @@ func (s *UCIServer) resetPosition() {
 	s.pos = pos
 }
 
+// calculateTimeLimit determines a reasonable maximum duration for a move
+// based on remaining time, increments, and moves to go.
 func calculateTimeLimit(color chester.Color, wtime, btime, winc, binc, movestogo int64) time.Duration {
 	var timeLeft, inc int64
 
@@ -342,6 +375,7 @@ func calculateTimeLimit(color chester.Color, wtime, btime, winc, binc, movestogo
 	return time.Duration(targetMs) * time.Millisecond
 }
 
+// formatNPS returns a human-readable string representation of nodes per second.
 func formatNPS(nps float32) string {
 	switch {
 	case nps >= 1_000_000:

@@ -45,9 +45,7 @@ func (s Square) String() string {
 	return fmt.Sprintf("%c%d", file+'a', rank+1)
 }
 
-// ParseSquare parses a two-character algebraic square name such as "e4" and
-// returns the corresponding Square. Returns SQ_NULL and an error if the string
-// is not exactly two characters or the rank/file values are out of range.
+// ParseSquare parses an algebraic square name (e.g., "e4") and returns the Square.
 func ParseSquare(s string) (Square, error) {
 	if len(s) < 2 {
 		return SQ_NULL, fmt.Errorf("invalid Square: %s", s)
@@ -56,6 +54,10 @@ func ParseSquare(s string) (Square, error) {
 	file := int8(s[0] - 'a')
 	if rank < 0 || rank > 7 || file < 0 || file > 7 {
 		return SQ_NULL, fmt.Errorf("invalid Square: %s", s)
+	}
+	return SquareFromRankAndFile(rank, file), nil
+}
+	return SQ_NULL, fmt.Errorf("invalid Square: %s", s)
 	}
 	return SquareFromRankAndFile(rank, file), nil
 }

@@ -39,35 +39,22 @@ type checkersPinsAndMask struct {
 	moveMask Bitboard
 }
 
-// LegalMoves appends all legal moves for the active color in position p to
-// moves and returns the updated slice. The second return value reports
-// whether the active king is currently in check.
-//
-// Double check restricts generation to king moves only. A single check
-// restricts all other pieces via moveMask. When not in check, moveMask
-// is set to EnemiesOrEmpty and all piece generators run.
+// LegalMoves appends all legal moves for the active color to moves and returns
+// the updated slice and whether the king is in check.
 func LegalMoves(moves []Move, p *Position) ([]Move, bool) {
 	return legalMoves(moves, p, false)
 }
 
-// CaptureMoves appends all legal **capture moves** for the active color in
-// the position p to the moves slice and returns the updated slice. The
-// second return value indicates whether the active king is currently in check.
-//
-// Capture-only generation respects the same rules as LegalMoves:
-//   - Double check: only king moves are generated, but only captures
-//     (seldom relevant, usually king captures if available).
-//   - Single check: only captures that resolve the check or along the
-//     check ray are generated.
-//   - Pinned pieces can only capture along their pin ray.
-//   - En passant captures are included if legal and do not expose the king
-//     to check.
+// CaptureMoves appends all legal capture moves for the active color to moves.
+// It returns the updated slice and whether the king is in check.
 func CaptureMoves(moves []Move, p *Position) ([]Move, bool) {
 	return legalMoves(moves, p, true)
 }
 
-// generate legal moves, if the captureOnly flag is set to true it
-// will only generate capture moves only.
+// legalMoves is the core move generator that produces all legal moves for
+// the current player. If captureOnly is true, it only generates captures and
+// promotions. It returns the updated moves slice and a boolean indicating
+// if the king is currently in check.
 func legalMoves(moves []Move, p *Position, captureOnly bool) ([]Move, bool) {
 	cpm := checkersPinsAndMask{}
 	numCheckers := checkersAndPinned(p, &cpm)

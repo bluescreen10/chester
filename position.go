@@ -42,12 +42,7 @@ const (
 	blackQueenSideCastle
 )
 
-// Position holds the complete state of a chess position. It combines a
-// bitboard representation (one Bitboard per piece type, one per color) with
-// a mailbox for O(1) square queries and an incrementally maintained
-// Polyglot-compatible Zobrist hash.
-//
-// The zero value is not a valid position; use ParseFEN to construct one.
+// Position represents the complete state of a chess position.
 type Position struct {
 	// One bitboard per piece type, shared across colors.
 	pieces [Piece(6)]Bitboard
@@ -78,11 +73,8 @@ type Position struct {
 	fullMoves uint16
 }
 
-// ParseFEN parses a FEN string and returns a pointer to the resulting Position.
-// All six FEN fields are required: piece placement, active color, castling
-// availability, en passant target, half-move clock, and full-move number.
-// The Zobrist hash is computed from scratch before returning.
-// Returns an error if the string is malformed or contains an unrecognised character.
+// ParseFEN parses a FEN string and returns the resulting Position.
+// Returns an error if the string is malformed.
 func ParseFEN(fen string) (*Position, error) {
 	var pos Position
 
@@ -646,27 +638,30 @@ func (p *Position) Hash() uint64 {
 	return p.hash
 }
 
+// WhitePieces returns a Bitboard with a bit set for every square occupied
+// by a white piece.
 func (p *Position) WhitePieces() Bitboard {
 	return p.allPieces[White]
 }
 
+// BlackPieces returns a Bitboard with a bit set for every square occupied
+// by a black piece.
 func (p *Position) BlackPieces() Bitboard {
 	return p.allPieces[Black]
 }
 
 // adjacentPawns reports whether any pawn of the given color occupies a square
-// horizontally adjacent to sq. Used to determine whether the en passant file
-// should be included in the Zobrist hash.
+// horizontally adjacent to sq. This is used in Zobrist hash calculation for
+// the en passant file.
 func (p *Position) adjacentPawns(color Color, sq Square) bool {
 	pawns := p.pieces[Pawn] & p.allPieces[color]
 	bb := NewBitboardFromSquare(sq)
 	return bb&((pawns&File_Not_H)<<1|(pawns&File_Not_A)>>1) != 0
 }
 
-// updateCastlingRights revokes any castling rights associated with sq (a rook
-// origin or king origin square) and updates the Zobrist hash accordingly.
-// It XORs out the old castling hash component before modifying the rights and
-// XORs in the new one after, so the hash remains consistent.
+// updateCastlingRights revokes any castling rights associated with sq
+// (typically a rook or king origin square) and updates the Zobrist hash
+// incrementally.
 func (p *Position) updateCastlingRights(sq Square) {
 	fromTo := NewBitboardFromSquare(sq)
 	p.hash ^= polyglotTable.Castling[p.castlingRights]
@@ -680,8 +675,8 @@ func (p *Position) updateCastlingRights(sq Square) {
 	p.hash ^= polyglotTable.Castling[p.castlingRights]
 }
 
-// move relocates piece of color from from to to, updating the mailbox,
-// bitboards, and Zobrist hash.
+// move relocates a piece of color from its current square to a new square.
+// It incrementally updates the internal mailbox, bitboards, and Zobrist hash.
 func (p *Position) move(piece Piece, color Color, from, to Square) {
 	p.mailbox[from] = Empty
 	p.mailbox[to] = piece
@@ -692,8 +687,8 @@ func (p *Position) move(piece Piece, color Color, from, to Square) {
 	p.hash ^= polyglotTable.Pieces[color][piece][to]
 }
 
-// put places piece of color on sq, updating the mailbox, bitboards,
-// and Zobrist hash. Used for promotion placement.
+// put places a specific piece of color on sq. It incrementally updates the
+// mailbox, bitboards, and Zobrist hash.
 func (p *Position) put(piece Piece, color Color, sq Square) {
 	p.mailbox[sq] = piece
 
@@ -703,8 +698,8 @@ func (p *Position) put(piece Piece, color Color, sq Square) {
 	p.hash ^= polyglotTable.Pieces[color][piece][sq]
 }
 
-// remove clears piece of color from sq, updating the mailbox, bitboards,
-// and Zobrist hash. Used for captures and promotion removal.
+// remove clears any piece of color from sq. It incrementally updates the
+// mailbox, bitboards, and Zobrist hash.
 func (p *Position) remove(piece Piece, color Color, sq Square) {
 	p.mailbox[sq] = Empty
 
@@ -714,9 +709,8 @@ func (p *Position) remove(piece Piece, color Color, sq Square) {
 	p.hash ^= polyglotTable.Pieces[color][piece][sq]
 }
 
-// computeHash rebuilds the Polyglot-compatible Zobrist hash of p from scratch.
-// It is called once by ParseFEN; thereafter the hash is maintained
-// incrementally.
+// computeHash calculates the Polyglot-compatible Zobrist hash for the entire
+// position from scratch. This is used when initializing a new Position.
 func computeHash(p *Position) uint64 {
 	var hash uint64
 
@@ -735,6 +729,16 @@ func computeHash(p *Position) uint64 {
 
 	if p.enPassantTarget != SQ_NULL && p.adjacentPawns(p.active, p.enPassantTarget) {
 		file := p.enPassantTarget.File()
+		hash ^= polyglotTable.EnPassant[file]
+	}
+
+	if p.Active() == White {
+		hash ^= polyglotTable.WhiteToMove
+	}
+
+	return hash
+}
+santTarget.File()
 		hash ^= polyglotTable.EnPassant[file]
 	}
 

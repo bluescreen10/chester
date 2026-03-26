@@ -12,9 +12,7 @@ import (
 // such as all squares occupied by white pawns.
 type Bitboard uint64
 
-// Single-square Bitboard constants for the first and eighth ranks.
-// Named BB_SQ_<file><rank>, e.g. BB_SQ_E1 has only the e1 bit set.
-// Used as masks in castling legality checks and rights updates.
+// Single-square Bitboard constants.
 const (
 	BB_SQ_A1 Bitboard = 1 << SQ_A1
 	BB_SQ_B1 Bitboard = 1 << SQ_B1
@@ -86,5 +84,8 @@ func (b Bitboard) RotateLeft(offset int) Bitboard {
 
 // NewBitboardFromSquare returns a Bitboard with only the bit for sq set.
 func NewBitboardFromSquare(sq Square) Bitboard {
+	return 1 << sq
+}
+nc NewBitboardFromSquare(sq Square) Bitboard {
 	return 1 << sq
 }
