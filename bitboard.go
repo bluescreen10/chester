@@ -86,6 +86,3 @@ func (b Bitboard) RotateLeft(offset int) Bitboard {
 func NewBitboardFromSquare(sq Square) Bitboard {
 	return 1 << sq
 }
-nc NewBitboardFromSquare(sq Square) Bitboard {
-	return 1 << sq
-}

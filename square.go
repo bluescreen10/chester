@@ -57,7 +57,3 @@ func ParseSquare(s string) (Square, error) {
 	}
 	return SquareFromRankAndFile(rank, file), nil
 }
-	return SQ_NULL, fmt.Errorf("invalid Square: %s", s)
-	}
-	return SquareFromRankAndFile(rank, file), nil
-}

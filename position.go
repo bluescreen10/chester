@@ -738,13 +738,3 @@ func computeHash(p *Position) uint64 {
 
 	return hash
 }
-santTarget.File()
-		hash ^= polyglotTable.EnPassant[file]
-	}
-
-	if p.Active() == White {
-		hash ^= polyglotTable.WhiteToMove
-	}
-
-	return hash
-}
