@@ -102,7 +102,7 @@ func TestSearchBestMove_MateScore(t *testing.T) {
 }
 
 func TestSearchWithTT(t *testing.T) {
-	p, _ := chester.ParseFEN(chester.DefaultFEN)
+	p, _ := chester.ParseFEN("6k1/5ppp/8/8/8/8/5PPP/3R2K1 w - - 0 1")
 	tt := chester.NewTranspositionTable(1024)
 
 	opts := &chester.SearchOptions{
