@@ -100,3 +100,31 @@ func TestSearchBestMove_MateScore(t *testing.T) {
 		t.Errorf("Expected mate score %d, got %d", expectedMate, lastEval.Score)
 	}
 }
+
+func TestSearchWithTT(t *testing.T) {
+	p, _ := chester.ParseFEN(chester.DefaultFEN)
+	tt := chester.NewTranspositionTable(1024)
+
+	opts := &chester.SearchOptions{
+		MaxDepth:           4,
+		TranspositionTable: tt,
+	}
+
+	start := time.Now()
+	ch, _ := chester.SearchBestMove(p, opts)
+	for range ch {
+	}
+
+	elapsedFirst := time.Since(start)
+
+	start = time.Now()
+	ch, _ = chester.SearchBestMove(p, opts)
+	for range ch {
+	}
+
+	elapsedSecond := time.Since(start)
+
+	if elapsedSecond > elapsedFirst {
+		t.Errorf("Transposition table failed t1 (%s) < t2 (%s)", elapsedFirst, elapsedSecond)
+	}
+}
