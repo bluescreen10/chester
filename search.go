@@ -317,10 +317,11 @@ func negamax(ctx *searchCtx, p *Position, moves []Move, alpha, beta, depth, ply 
 	// tranposition table enabled
 	var ttMove Move
 	var entry ttEntry
+	var ok bool
 	if ctx.tt != nil {
-		entry = ctx.tt.get(p.hash)
-		if entry.hash == p.hash {
-			// The stored move is worth having even when the stored depth is
+		entry, ok = ctx.tt.get(p.hash)
+		if ok {
+			// The entry move is worth having even when the entry depth is
 			// too shallow to cut off: ordering it first is where most of the
 			// table's value comes from.
 			ttMove = entry.move
@@ -437,9 +438,10 @@ func negamax(ctx *searchCtx, p *Position, moves []Move, alpha, beta, depth, ply 
 			flag = lowerBound
 		}
 
-		if entry.hash != p.hash || int(entry.depth) <= depth {
-			ctx.tt.set(ttEntry{
-				hash:  p.hash,
+		// Depth-preferred replacement: keep what is there only if it is the
+		// same position searched deeper than this.
+		if !ok || int(entry.depth) <= depth {
+			ctx.tt.set(p.hash, ttEntry{
 				score: int32(scoreToTT(bestScore, ply)),
 				move:  bestMove,
 				depth: int8(depth),
