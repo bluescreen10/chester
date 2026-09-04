@@ -17,6 +17,32 @@ const (
 	blackKingSideCastleNotAttacked  = BB_SQ_E8 | BB_SQ_F8 | BB_SQ_G8
 )
 
+// appendPromotions appends the promotion moves for a pawn going from from to
+// to, and reports the moves slice.
+//
+// allPieces selects whether the dominated promotions are included. A queen is
+// a rook plus a bishop, so a rook or bishop promotion is only ever played to
+// avoid stalemate -- and the quiescence search stands pat rather than
+// reasoning about stalemate, so there they are pure branching factor. A knight
+// is not dominated by anything: it attacks squares a queen cannot, which is
+// what makes promoting with check to fork the king and queen work, so it is
+// always generated.
+func appendPromotions(moves []Move, from, to Square, allPieces bool) []Move {
+	moves = append(moves,
+		NewPromotionMove(from, to, Queen),
+		NewPromotionMove(from, to, Knight),
+	)
+
+	if allPieces {
+		moves = append(moves,
+			NewPromotionMove(from, to, Rook),
+			NewPromotionMove(from, to, Bishop),
+		)
+	}
+
+	return moves
+}
+
 // promotionRanks are the two ranks a pawn promotes on. Splitting pawn pushes
 // by destination rank separates promotions from ordinary pushes without a
 // per-move branch in either loop.
@@ -50,29 +76,34 @@ func LegalMoves(moves []Move, p *Position) ([]Move, bool) {
 	return legalMoves(moves, p, false)
 }
 
-// CaptureMoves appends all legal capture moves for the active color to moves,
-// together with all promotions, whether or not they capture. It returns the
-// updated slice and whether the king is in check.
+// NoisyMoves appends the legal noisy moves for the active color to moves and
+// returns the updated slice and whether the king is in check.
 //
-// Promotions are included because they are noisy, not quiet: this is the move
-// set the quiescence search uses, and it has to resolve a pawn turning into a
-// queen for the same reason it has to resolve an exchange.
-func CaptureMoves(moves []Move, p *Position) ([]Move, bool) {
+// A noisy move is one that changes material: a capture, or a promotion whether
+// or not it captures. It is the exact complement of isQuiet, and it is the
+// move set the quiescence search runs on -- quiescence exists to search noisy
+// moves until none are left, which is what makes the resulting position quiet.
+//
+// Promotions to rook and bishop are omitted. They are noisy by the definition
+// above, but a queen is a rook plus a bishop, so they are only ever played to
+// avoid stalemate, which quiescence never reasons about.
+func NoisyMoves(moves []Move, p *Position) ([]Move, bool) {
 	return legalMoves(moves, p, true)
 }
 
-// legalMoves is the core move generator that produces all legal moves for
-// the current player. If captureOnly is true, it only generates captures and
-// promotions. It returns the updated moves slice and a boolean indicating
-// if the king is currently in check.
-func legalMoves(moves []Move, p *Position, captureOnly bool) ([]Move, bool) {
+// legalMoves is the core move generator that produces all legal moves for the
+// current player. If noisyOnly is true it generates only the moves that change
+// material -- captures and promotions -- which is the set quiescence searches.
+// It returns the updated moves slice and a boolean indicating if the king is
+// currently in check.
+func legalMoves(moves []Move, p *Position, noisyOnly bool) ([]Move, bool) {
 	cpm := checkersPinsAndMask{}
 	numCheckers := checkersAndPinned(p, &cpm)
 	inCheck := true
 
 	switch numCheckers {
 	case 0:
-		if captureOnly {
+		if noisyOnly {
 			cpm.moveMask = p.Enemies()
 		} else {
 			cpm.moveMask = p.EnemiesOrEmpty()
@@ -80,19 +111,18 @@ func legalMoves(moves []Move, p *Position, captureOnly bool) ([]Move, bool) {
 		inCheck = false
 		fallthrough
 	case 1:
-		//TODO: Rename to capturesAndPromotionsOnly
-		if !captureOnly {
+		if !noisyOnly {
 			moves = genPawnForwardMoves(moves, p, cpm)
 		}
 
-		// Promotions are generated even in capture-only mode. They are not
-		// captures, but they are not quiet either: leaving one out of the
-		// quiescence search hides a queen appearing on the board just past
-		// the horizon.
-		moves = genPawnPromotions(moves, p, cpm, inCheck)
+		// Promotions are generated even when only noisy moves are wanted.
+		// They are not captures, but they are not quiet either: leaving one
+		// out of the quiescence search hides a queen appearing on the board
+		// just past the horizon.
+		moves = genPawnPromotions(moves, p, cpm, inCheck, noisyOnly)
 
-		moves = genPawnLeftAttackMoves(moves, p, cpm)
-		moves = genPawnRightAttackMoves(moves, p, cpm)
+		moves = genPawnLeftAttackMoves(moves, p, cpm, noisyOnly)
+		moves = genPawnRightAttackMoves(moves, p, cpm, noisyOnly)
 
 		if p.EnPassantTarget() != SQ_NULL {
 			moves = genPawnEnPassantMoves(moves, p, cpm, inCheck)
@@ -103,7 +133,7 @@ func legalMoves(moves []Move, p *Position, captureOnly bool) ([]Move, bool) {
 		moves = genQueenMoves(moves, p, cpm)
 		fallthrough
 	default:
-		moves = genKingMoves(moves, p, captureOnly)
+		moves = genKingMoves(moves, p, noisyOnly)
 	}
 	return moves, inCheck
 }
@@ -310,8 +340,9 @@ func genPawnForwardMoves(moves []Move, p *Position, cpm checkersPinsAndMask) []M
 }
 
 // genPawnPromotions appends all legal pawn pushes onto the last rank for the
-// active color, expanded into all four promotion piece types. Capturing
-// promotions are not included here; they come from the two attack generators.
+// active color, expanded by appendPromotions into one move per promotion
+// piece. Capturing promotions are not included here; they come from the two
+// attack generators.
 //
 // This is split out of genPawnForwardMoves so that the quiescence search can
 // ask for promotions without asking for quiet pushes. A pawn reaching the last
@@ -323,7 +354,7 @@ func genPawnForwardMoves(moves []Move, p *Position, cpm checkersPinsAndMask) []M
 // check, cpm.moveMask holds the squares that answer the check and must be
 // obeyed. Otherwise no mask is needed: a push already lands on an empty
 // square, and pinned pawns are excluded below.
-func genPawnPromotions(moves []Move, p *Position, cpm checkersPinsAndMask, inCheck bool) []Move {
+func genPawnPromotions(moves []Move, p *Position, cpm checkersPinsAndMask, inCheck, noisyOnly bool) []Move {
 	us := p.Active()
 
 	// Only a pawn one rank from the end can promote by pushing. In nearly
@@ -352,12 +383,7 @@ func genPawnPromotions(moves []Move, p *Position, cpm checkersPinsAndMask, inChe
 	for pushes != 0 {
 		to, pushes = pushes.PopLSB()
 		from = to - sp
-		moves = append(moves,
-			NewPromotionMove(from, to, Queen),
-			NewPromotionMove(from, to, Rook),
-			NewPromotionMove(from, to, Bishop),
-			NewPromotionMove(from, to, Knight),
-		)
+		moves = appendPromotions(moves, from, to, !noisyOnly)
 	}
 
 	return moves
@@ -367,8 +393,8 @@ func genPawnPromotions(moves []Move, p *Position, cpm checkersPinsAndMask, inChe
 // for the active color. "Left" is toward the a-file for White, toward the
 // h-file for Black. Straight-pinned pawns cannot capture. Diagonally pinned
 // pawns may only capture along their pin ray. Captures on the back rank are
-// expanded into all four promotion piece types.
-func genPawnLeftAttackMoves(moves []Move, p *Position, cpm checkersPinsAndMask) []Move {
+// expanded by appendPromotions into one move per promotion piece.
+func genPawnLeftAttackMoves(moves []Move, p *Position, cpm checkersPinsAndMask, noisyOnly bool) []Move {
 	us := p.Active()
 	leftAttacks := 16*int(us) - 9
 	pawns := p.Pawns() &^ cpm.straightPins & File_Not_A
@@ -386,12 +412,7 @@ func genPawnLeftAttackMoves(moves []Move, p *Position, cpm checkersPinsAndMask) 
 		if to < SQ_A1 && to > SQ_H8 {
 			moves = append(moves, NewMove(from, to))
 		} else {
-			moves = append(moves,
-				NewPromotionMove(from, to, Queen),
-				NewPromotionMove(from, to, Rook),
-				NewPromotionMove(from, to, Bishop),
-				NewPromotionMove(from, to, Knight),
-			)
+			moves = appendPromotions(moves, from, to, !noisyOnly)
 		}
 	}
 
@@ -402,8 +423,8 @@ func genPawnLeftAttackMoves(moves []Move, p *Position, cpm checkersPinsAndMask) 
 // for the active color. "Right" is toward the h-file for White, toward the
 // a-file for Black. Straight-pinned pawns cannot capture. Diagonally pinned
 // pawns may only capture along their pin ray. Captures on the back rank are
-// expanded into all four promotion piece types.
-func genPawnRightAttackMoves(moves []Move, p *Position, cpm checkersPinsAndMask) []Move {
+// expanded by appendPromotions into one move per promotion piece.
+func genPawnRightAttackMoves(moves []Move, p *Position, cpm checkersPinsAndMask, noisyOnly bool) []Move {
 	us := p.Active()
 	rightAttacks := 16*int(us) - 7
 
@@ -421,12 +442,7 @@ func genPawnRightAttackMoves(moves []Move, p *Position, cpm checkersPinsAndMask)
 		if to < SQ_A1 && to > SQ_H8 {
 			moves = append(moves, NewMove(from, to))
 		} else {
-			moves = append(moves,
-				NewPromotionMove(from, to, Queen),
-				NewPromotionMove(from, to, Rook),
-				NewPromotionMove(from, to, Bishop),
-				NewPromotionMove(from, to, Knight),
-			)
+			moves = appendPromotions(moves, from, to, !noisyOnly)
 		}
 	}
 
@@ -626,16 +642,18 @@ func genQueenMoves(moves []Move, p *Position, cpm checkersPinsAndMask) []Move {
 	return moves
 }
 
-// genKingMoves appends all legal king moves including castling for the active
-// color. The full enemy attack map is computed and subtracted from candidate
-// targets. Castling is only added when the rights flag is set, the path is
-// unoccupied, and no square the king crosses is under attack.
-func genKingMoves(moves []Move, p *Position, captureOnly bool) []Move {
+// genKingMoves appends all legal king moves for the active color. The full
+// enemy attack map is computed and subtracted from candidate targets.
+//
+// When noisyOnly is false, castling is also generated, but only when the rights
+// flag is set, the path is unoccupied, and no square the king crosses is under
+// attack. A castle moves no material, so it is never noisy.
+func genKingMoves(moves []Move, p *Position, noisyOnly bool) []Move {
 	us := p.Active()
 	king := p.King()
 
 	var mask Bitboard
-	if captureOnly {
+	if noisyOnly {
 		mask = p.Enemies()
 	} else {
 		mask = p.EnemiesOrEmpty()

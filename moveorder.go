@@ -11,9 +11,10 @@ package chester
 //	transposition table move
 //	queen promotions        (ordered by what they capture)
 //	captures                (ordered by MVV-LVA)
+//	knight promotions       (not dominated by the queen: =N+ forks)
 //	killer moves            (quiet moves that refuted a sibling at this ply)
 //	quiet moves             (ordered by the history heuristic)
-//	under-promotions        (almost never best, so they go last)
+//	rook and bishop promotions (only ever played to avoid stalemate)
 
 const (
 	// maxPly is the deepest ply the main search will ever reach, and the
@@ -29,12 +30,13 @@ const (
 // Score bands for move ordering. The gaps between bands are wide enough that
 // no within-band bonus can promote a move into the band above it.
 const (
-	scoreTTMove     int32 = 1 << 28
-	scoreQueenPromo int32 = 1 << 26
-	scoreCapture    int32 = 1 << 24
-	scoreKiller1    int32 = 1 << 22
-	scoreKiller2    int32 = scoreKiller1 - 1
-	scoreUnderPromo int32 = -(1 << 22)
+	scoreTTMove      int32 = 1 << 28
+	scoreQueenPromo  int32 = 1 << 26
+	scoreCapture     int32 = 1 << 24
+	scoreKnightPromo int32 = 1 << 23
+	scoreKiller1     int32 = 1 << 22
+	scoreKiller2     int32 = scoreKiller1 - 1
+	scoreUnderPromo  int32 = -(1 << 22)
 
 	// maxHistory bounds the magnitude of a history score. Quiet moves score
 	// in [-maxHistory, maxHistory], well inside the gap between the killer
@@ -54,6 +56,22 @@ var pieceOrder = [7]int32{
 	Queen:  9,
 	King:   0,
 	Empty:  0,
+}
+
+// promoBonus ranks a promotion by how useful the new piece actually is, on the
+// same scale mvvLva uses for captured material.
+//
+// It is deliberately not the nominal value of the piece. A queen is a rook
+// plus a bishop, so a rook or bishop promotion is never better than a queen
+// except when the queen would stalemate -- which makes them worth less in
+// practice than a knight promotion, even though a rook is nominally worth
+// more than a knight. Ranking them by material would try the two useless
+// promotions before the useful one.
+var promoBonus = [7]int32{
+	Queen:  9 * 16,
+	Knight: 3 * 16,
+	Rook:   1 * 16,
+	Bishop: 1 * 16,
 }
 
 // mvvLva scores a capture by Most Valuable Victim, Least Valuable Attacker:
@@ -104,12 +122,22 @@ func (ctx *searchCtx) scoreMoves(scores *[maxMoves]int32, moves []Move, p *Posit
 		switch victim := victimOf(p, m); {
 		case m == ttMove:
 			score = scoreTTMove
-		case m.IsPromotion() && m.PromoPiece() == Queen:
-			score = scoreQueenPromo + mvvLva(victim, Pawn)
+
+		// A promotion is ranked by the piece that appears, not by whether it
+		// happens to capture on the way. Capturing with a rook promotion is
+		// still a rook promotion, and belongs last.
+		case m.IsPromotion():
+			switch m.PromoPiece() {
+			case Queen:
+				score = scoreQueenPromo + mvvLva(victim, Pawn)
+			case Knight:
+				score = scoreKnightPromo + mvvLva(victim, Pawn)
+			default:
+				score = scoreUnderPromo
+			}
+
 		case victim != Empty:
 			score = scoreCapture + mvvLva(victim, p.mailbox[m.From()])
-		case m.IsPromotion():
-			score = scoreUnderPromo
 		case m == killer1:
 			score = scoreKiller1
 		case m == killer2:
@@ -129,7 +157,7 @@ func scoreCaptures(scores *[maxMoves]int32, moves []Move, p *Position) {
 	for i, m := range moves {
 		score := mvvLva(victimOf(p, m), p.mailbox[m.From()])
 		if m.IsPromotion() {
-			score += pieceOrder[m.PromoPiece()] * 16
+			score += promoBonus[m.PromoPiece()]
 		}
 		scores[i] = score
 	}

@@ -478,7 +478,7 @@ func quiescence(ctx *searchCtx, p *Position, moves []Move, alpha, beta int) (int
 	// Captures and promotions. Both change material sharply enough that
 	// stopping on one would leave the score mid-swing, which is the horizon
 	// effect quiescence exists to avoid.
-	moves, _ = CaptureMoves(moves, p)
+	moves, _ = NoisyMoves(moves, p)
 	count := len(moves)
 
 	// Quiescence is where most of the nodes are spent, and it is almost
