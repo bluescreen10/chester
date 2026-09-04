@@ -17,6 +17,11 @@ const (
 	blackKingSideCastleNotAttacked  = BB_SQ_E8 | BB_SQ_F8 | BB_SQ_G8
 )
 
+// promotionRanks are the two ranks a pawn promotes on. Splitting pawn pushes
+// by destination rank separates promotions from ordinary pushes without a
+// per-move branch in either loop.
+const promotionRanks = Rank_1 | Rank_8
+
 // checkersPinsAndMask accumulates the check and pin state of the active
 // king, computed once per position by checkersAndPinned before dispatching
 // to the per-piece generators.
@@ -45,8 +50,13 @@ func LegalMoves(moves []Move, p *Position) ([]Move, bool) {
 	return legalMoves(moves, p, false)
 }
 
-// CaptureMoves appends all legal capture moves for the active color to moves.
-// It returns the updated slice and whether the king is in check.
+// CaptureMoves appends all legal capture moves for the active color to moves,
+// together with all promotions, whether or not they capture. It returns the
+// updated slice and whether the king is in check.
+//
+// Promotions are included because they are noisy, not quiet: this is the move
+// set the quiescence search uses, and it has to resolve a pawn turning into a
+// queen for the same reason it has to resolve an exchange.
 func CaptureMoves(moves []Move, p *Position) ([]Move, bool) {
 	return legalMoves(moves, p, true)
 }
@@ -70,14 +80,22 @@ func legalMoves(moves []Move, p *Position, captureOnly bool) ([]Move, bool) {
 		inCheck = false
 		fallthrough
 	case 1:
+		//TODO: Rename to capturesAndPromotionsOnly
 		if !captureOnly {
 			moves = genPawnForwardMoves(moves, p, cpm)
 		}
+
+		// Promotions are generated even in capture-only mode. They are not
+		// captures, but they are not quiet either: leaving one out of the
+		// quiescence search hides a queen appearing on the board just past
+		// the horizon.
+		moves = genPawnPromotions(moves, p, cpm, inCheck)
+
 		moves = genPawnLeftAttackMoves(moves, p, cpm)
 		moves = genPawnRightAttackMoves(moves, p, cpm)
 
 		if p.EnPassantTarget() != SQ_NULL {
-			moves = genPawnEnPassantMoves(moves, p, cpm)
+			moves = genPawnEnPassantMoves(moves, p, cpm, inCheck)
 		}
 		moves = genKnightMoves(moves, p, cpm)
 		moves = genBishopMoves(moves, p, cpm)
@@ -260,7 +278,7 @@ func genKingAttacks(p *Position) Bitboard {
 // genPawnForwardMoves appends all legal pawn push moves (single and double)
 // for the active color. Diagonally pinned pawns cannot push. Straight-pinned
 // pawns may only push along their pin ray. Pushes to the back rank are
-// expanded into all four promotion piece types.
+// promotions are generated separately, by genPawnPromotions.
 func genPawnForwardMoves(moves []Move, p *Position, cpm checkersPinsAndMask) []Move {
 	us := p.Active()
 	singlePushes := -8 + 16*int(us)
@@ -275,20 +293,10 @@ func genPawnForwardMoves(moves []Move, p *Position, cpm checkersPinsAndMask) []M
 
 	singlePush := pawns.RotateLeft(singlePushes) &^ p.Occupied()
 	sp := Square(singlePushes)
-	for pushes := singlePush & cpm.moveMask; pushes != 0; {
+	for pushes := singlePush & cpm.moveMask &^ promotionRanks; pushes != 0; {
 		to, pushes = pushes.PopLSB()
 		from = to - sp
-
-		if to < SQ_A1 && to > SQ_H8 {
-			moves = append(moves, NewMove(from, to))
-		} else {
-			moves = append(moves,
-				NewPromotionMove(from, to, Queen),
-				NewPromotionMove(from, to, Rook),
-				NewPromotionMove(from, to, Bishop),
-				NewPromotionMove(from, to, Knight),
-			)
-		}
+		moves = append(moves, NewMove(from, to))
 	}
 
 	doublePushes := (singlePush & startPlusOneRank).RotateLeft(singlePushes) &^ p.Occupied() & cpm.moveMask
@@ -298,6 +306,60 @@ func genPawnForwardMoves(moves []Move, p *Position, cpm checkersPinsAndMask) []M
 		from = to - dp
 		moves = append(moves, NewMove(from, to))
 	}
+	return moves
+}
+
+// genPawnPromotions appends all legal pawn pushes onto the last rank for the
+// active color, expanded into all four promotion piece types. Capturing
+// promotions are not included here; they come from the two attack generators.
+//
+// This is split out of genPawnForwardMoves so that the quiescence search can
+// ask for promotions without asking for quiet pushes. A pawn reaching the last
+// rank swings the evaluation by about eight hundred centipawns, which is
+// exactly the kind of change quiescence exists to resolve, but a pawn stepping
+// forward onto an empty square is the definition of a quiet move.
+//
+// inCheck selects which restriction applies to the destination. While in
+// check, cpm.moveMask holds the squares that answer the check and must be
+// obeyed. Otherwise no mask is needed: a push already lands on an empty
+// square, and pinned pawns are excluded below.
+func genPawnPromotions(moves []Move, p *Position, cpm checkersPinsAndMask, inCheck bool) []Move {
+	us := p.Active()
+
+	// Only a pawn one rank from the end can promote by pushing. In nearly
+	// every position there are none, and this check is what keeps the
+	// function affordable for quiescence, which calls it at every node.
+	aboutToPromote := (Rank_7 * (1 - Bitboard(us))) | (Rank_2 * Bitboard(us))
+	if p.Pawns()&aboutToPromote == 0 {
+		return moves
+	}
+
+	singlePushes := -8 + 16*int(us)
+
+	pawns := p.Pawns() &^ cpm.diagonalPins
+	pinnedPawns := pawns & cpm.straightPins.RotateLeft(-singlePushes)
+	unPinnedPawns := pawns &^ cpm.straightPins
+	pawns = pinnedPawns | unPinnedPawns
+
+	pushes := pawns.RotateLeft(singlePushes) &^ p.Occupied() & promotionRanks
+	if inCheck {
+		pushes &= cpm.moveMask
+	}
+
+	sp := Square(singlePushes)
+	var from, to Square
+
+	for pushes != 0 {
+		to, pushes = pushes.PopLSB()
+		from = to - sp
+		moves = append(moves,
+			NewPromotionMove(from, to, Queen),
+			NewPromotionMove(from, to, Rook),
+			NewPromotionMove(from, to, Bishop),
+			NewPromotionMove(from, to, Knight),
+		)
+	}
+
 	return moves
 }
 
@@ -376,8 +438,7 @@ func genPawnRightAttackMoves(moves []Move, p *Position, cpm checkersPinsAndMask)
 // removing both the capturing and the captured pawn from the occupancy, the
 // king's rank is re-checked for rook or queen attacks to ensure the capture
 // does not expose the king.
-func genPawnEnPassantMoves(moves []Move, p *Position, cpm checkersPinsAndMask) []Move {
-	const enPassantRanks = Rank_5 | Rank_4
+func genPawnEnPassantMoves(moves []Move, p *Position, cpm checkersPinsAndMask, inCheck bool) []Move {
 	us := p.Active()
 
 	kingSq, _ := p.King().PopLSB()
@@ -388,31 +449,60 @@ func genPawnEnPassantMoves(moves []Move, p *Position, cpm checkersPinsAndMask) [
 	rightAttacks := int(16*us - 7)
 	enPassantTarget := NewBitboardFromSquare(p.EnPassantTarget())
 
-	left := (pawns & File_Not_A).RotateLeft(leftAttacks) & enPassantTarget
-	if left != 0 {
-		occupiedWithoutPawns := p.Occupied() &^ (left | enPassantTarget)
-		path := genRookAttacks(kingSq, occupiedWithoutPawns) & enPassantRanks
+	if left := (pawns & File_Not_A).RotateLeft(leftAttacks) & enPassantTarget; left != 0 {
+		to, _ := left.PopLSB()
+		from := to - Square(leftAttacks)
 
-		if enemyQueensOrRooks&path == 0 {
-			to, _ := left.PopLSB()
-			from := to - Square(leftAttacks)
+		if enPassantIsLegal(p, cpm, kingSq, enemyQueensOrRooks, from, to, us, inCheck) {
 			moves = append(moves, NewMove(from, to))
 		}
 	}
 
-	right := (pawns & File_Not_H).RotateLeft(rightAttacks) & enPassantTarget
-	if right != 0 {
-		occupiedWithoutPawns := p.Occupied() &^ (right | enPassantTarget)
-		path := genRookAttacks(kingSq, occupiedWithoutPawns) & enPassantRanks
+	if right := (pawns & File_Not_H).RotateLeft(rightAttacks) & enPassantTarget; right != 0 {
+		to, _ := right.PopLSB()
+		from := to - Square(rightAttacks)
 
-		if enemyQueensOrRooks&path == 0 {
-			to, _ := right.PopLSB()
-			from := to - Square(rightAttacks)
+		if enPassantIsLegal(p, cpm, kingSq, enemyQueensOrRooks, from, to, us, inCheck) {
 			moves = append(moves, NewMove(from, to))
 		}
 	}
 
 	return moves
+}
+
+// enPassantIsLegal reports whether capturing en passan from and to is
+// legal. It covers the two cases the shared check and pin masks cannot,
+// both of which exist because en passant is the only move where the captured
+// piece does not stand on the destination square.
+func enPassantIsLegal(p *Position, cpm checkersPinsAndMask, kingSq Square, enemyQueensOrRooks Bitboard, from, to Square, us Color, inCheck bool) bool {
+	enemySq := to + 8 - Square(16*us)
+	enemy := NewBitboardFromSquare(enemySq)
+
+	// While in check, en passant only helps if it captures the checking pawn
+	// or interposes on the checking ray. moveMask describes both, but it has
+	// to be tested against the captured pawn's square as well as the
+	// destination, since a double-pushed pawn giving check is not standing
+	// on the square that captures it.
+	if inCheck && cpm.moveMask&(NewBitboardFromSquare(to)|enemy) == 0 {
+		return false
+	}
+
+	// En passant is also the only move that clears two squares of one rank at
+	// once: the capturing pawn leaves from, and the captured pawn is removed
+	// from beside it. Ordinary pin detection looks for a single blocker
+	// between the king and an enemy slider, so a rank whose only blockers are
+	// these two pawns never registers as a pin. Recheck it on the occupancy
+	// the move actually produces.
+	//
+	// Only a rank can hide this. A file or diagonal through the king loses at
+	// most one of the two pawns, which the regular pin masks already cover.
+	rank := Bitboard(0xff) << (from & 56)
+	if NewBitboardFromSquare(kingSq)&rank == 0 {
+		return true
+	}
+
+	occupied := p.Occupied() &^ (NewBitboardFromSquare(from) | enemy)
+	return genRookAttacks(kingSq, occupied)&rank&enemyQueensOrRooks == 0
 }
 
 // genKnightMoves appends all legal knight moves for the active color. Knights

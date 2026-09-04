@@ -27,6 +27,11 @@ type UCIServer struct {
 	isDebugLogging bool
 	tt             *chester.TranspositionTable
 	stopFunc       func()
+
+	// history holds the Zobrist hash of every position that occurred before
+	// s.pos in the current game. The search needs it to recognise a draw by
+	// repetition against moves that were actually played.
+	history []uint64
 }
 
 // startUCI initializes a standard UCI session.
@@ -162,6 +167,7 @@ func (s *UCIServer) handlePosition(args []string) {
 			return
 		}
 		s.pos = pos
+		s.history = s.history[:0]
 		args = args[i:]
 	default:
 		s.error("unknown position argument: %s", args[1])
@@ -178,6 +184,7 @@ func (s *UCIServer) handlePosition(args []string) {
 					s.error("error parsing move: %s", err)
 					return
 				}
+				s.history = append(s.history, s.pos.Hash())
 				s.pos.Do(move)
 				s.debug("position: %s", s.pos.String())
 			}
@@ -196,6 +203,7 @@ func (s *UCIServer) handleGo(args []string) {
 
 	opts := &chester.SearchOptions{
 		MaxDepth:           100,
+		History:            s.history,
 		MaxNodes:           math.MaxInt64,
 		TranspositionTable: s.tt,
 	}
@@ -241,11 +249,13 @@ func (s *UCIServer) handleGo(args []string) {
 	}
 
 	go func() {
+		started := time.Now()
 		pos := *s.pos
 		ch, stopFunc := chester.SearchBestMove(&pos, opts)
 		s.stopFunc = stopFunc
 		for e := range ch {
-			s.info("depth %d score cp %d pv %s", e.Depth, e.Score, e.Best)
+			s.info("depth %d score cp %d nodes %d nps %.0f pv %s",
+				e.Depth, e.Score, e.Nodes, nps(e.Nodes, time.Since(started)), e.Best)
 			s.bestMove = e.Best.String()
 		}
 
@@ -301,15 +311,21 @@ func (s *UCIServer) handlePerft(args []string) {
 	}()
 }
 
-// handleCPUProfile toggles CPU profiling for performance analysis.
+// handleCPUProfile toggles CPU profiling for ad-hoc performance analysis.
 func (s *UCIServer) handleCPUProfile(args []string) {
 	if s.isCPUProfiling {
-		s.info("cpu profiling stopped")
 		pprof.StopCPUProfile()
+		if err := s.CPUProfileFile.Close(); err != nil {
+			s.error("error closing profile file: %s", err)
+		}
+
+		s.CPUProfileFile = nil
+		s.isCPUProfiling = false
+		s.info("cpu profiling stopped")
 		return
 	}
 
-	filename := "default.pgo"
+	filename := "cpu.prof"
 	if len(args) != 0 {
 		filename = args[0]
 	}
@@ -320,8 +336,13 @@ func (s *UCIServer) handleCPUProfile(args []string) {
 		return
 	}
 
-	s.info("cpu profiling started")
-	pprof.StartCPUProfile(file)
+	if err := pprof.StartCPUProfile(file); err != nil {
+		s.error("error starting profile: %s", err)
+		file.Close()
+		return
+	}
+
+	s.info("cpu profiling started, writing to %s", filename)
 	s.CPUProfileFile = file
 	s.isCPUProfiling = true
 }
@@ -349,6 +370,7 @@ func (s *UCIServer) resetPosition() {
 		s.error("error parsing fen: %s", err)
 	}
 	s.pos = pos
+	s.history = s.history[:0]
 }
 
 // calculateTimeLimit determines a reasonable maximum duration for a move
@@ -385,4 +407,12 @@ func formatNPS(nps float32) string {
 	default:
 		return fmt.Sprintf("%.0f NPS", nps)
 	}
+}
+
+// nps returns nodes searched per second, or zero if no time has elapsed yet.
+func nps(nodes int64, d time.Duration) float64 {
+	if d <= 0 {
+		return 0
+	}
+	return float64(nodes) / d.Seconds()
 }

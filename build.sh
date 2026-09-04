@@ -1,11 +1,32 @@
 #!/bin/bash
 set -e
 
-VERSION=0.3.1
+VERSION=0.4.2
 IMAGE=bluescreen10/chester
 
 # create build dir
 mkdir -p build
+
+# 1. Regenerate the PGO profile
+#
+# cmd/default.pgo is picked up automatically by go build. It has to cover both
+# move generation and search, or the compiler optimizes only half the engine.
+# Profiles key on function names, not machine code, so one generated here
+# applies to every architecture built below.
+#
+# The generator itself is built without PGO (there is no default.pgo in its own
+# directory), which keeps each profile a measurement of the plain build rather
+# than of the previous profile's decisions.
+#
+# Set SKIP_PGO=1 to reuse the committed profile, which is what you want on a
+# loaded or shared machine: a profile collected under contention misattributes
+# time and is worse than a slightly stale one.
+if [ "${SKIP_PGO:-0}" = "1" ]; then
+  echo "--- Skipping PGO regeneration (SKIP_PGO=1) ---"
+else
+  echo "--- Regenerating PGO profile ---"
+  go run ./internal/cmd/pgo
+fi
 
 # generate config.yml from template
 cp config.template.yml build/config.yml

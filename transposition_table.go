@@ -15,15 +15,25 @@ const (
 )
 
 // ttEntry represents a single record in the transposition table.
+//
+// The field order and widths are chosen so that an entry occupies exactly
+// 16 bytes with no padding, which keeps four entries per cache line and
+// doubles the number of positions a table of a given size can hold.
 type ttEntry struct {
 	// hash is the full Zobrist hash of the position to verify no collisions.
 	hash uint64
 
-	// score is the evaluation score found during search.
-	score int
+	// score is the evaluation score found during search. Mate scores are
+	// stored relative to the node they were found at, see scoreToTT.
+	score int32
+
+	// move is the best move found at this position, or the move that caused
+	// a beta cutoff. It is used to order moves even when the stored depth is
+	// too shallow to allow a cutoff, which is where most of its value lies.
+	move Move
 
 	// depth is the remaining search depth when this score was recorded.
-	depth int
+	depth int8
 
 	// flag indicates whether the score is exact, an upper bound, or a lower bound.
 	flag ttFlag

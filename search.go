@@ -26,6 +26,13 @@ type Evaluation struct {
 
 	// Centipawn score from the side to move perspective
 	Score int
+
+	// Nodes is the total number of positions visited by the search so far,
+	// including quiescence nodes.
+	Nodes int64
+
+	// QNodes is the subset of Nodes that were visited during quiescence.
+	QNodes int64
 }
 
 // EvalFunc defines the signature for a function that performs a static
@@ -62,6 +69,12 @@ type SearchOptions struct {
 
 	// Optionally you can pass a transposition table to be used
 	TranspositionTable *TranspositionTable
+
+	// History holds the Zobrist hashes of the positions that preceded the
+	// one being searched, oldest first and excluding it. Supplying it lets
+	// the search see a repetition of a position that was actually reached
+	// earlier in the game, not just one created inside the search tree.
+	History []uint64
 }
 
 var (
@@ -103,6 +116,22 @@ type searchCtx struct {
 	// qnodes tracks the number of positions visited specifically
 	// during the quiescence search.
 	qnodes int64
+
+	// killers holds, per ply, up to two quiet moves that caused a beta
+	// cutoff at that ply. A move that refutes one line often refutes its
+	// siblings, so they are tried immediately after the captures.
+	killers [maxPly][2]Move
+
+	// history scores quiet moves by how often they have caused a beta
+	// cutoff anywhere in the tree, indexed by [color][from][to]. It is the
+	// only ordering signal available for quiet moves that are neither the
+	// transposition table move nor a killer.
+	history [Color(2)][64][64]int32
+
+	// stack holds the Zobrist hash of every position preceding the one
+	// being searched: the game history supplied by the caller, followed by
+	// the positions along the current search path. See isRepetition.
+	stack []uint64
 }
 
 // SearchBestMove initiates an asynchronous search for the best move.
@@ -135,7 +164,10 @@ func SearchBestMove(p *Position, opts *SearchOptions) (chan Evaluation, context.
 			return
 		}
 
-		rootMoves := make([]Move, 0, 1024)
+		// The move buffer is shared by every ply: each node carves its own
+		// slice off the tail of its parent's. Sizing it for maxPly plies of
+		// maxMoves keeps the search allocation free at any reachable depth.
+		rootMoves := make([]Move, 0, maxPly*maxMoves)
 		newPos := Position{}
 
 		rootMoves, _ = LegalMoves(rootMoves, p)
@@ -144,17 +176,38 @@ func SearchBestMove(p *Position, opts *SearchOptions) (chan Evaluation, context.
 		}
 
 		count := len(rootMoves)
+		if count == 0 {
+			return
+		}
+
+		maxDepth := opts.MaxDepth
+		if maxDepth > maxPly-1 {
+			maxDepth = maxPly - 1
+		}
 
 		searchCtx := &searchCtx{
 			Context:  ctx,
 			maxNodes: opts.MaxNodes,
 			tt:       opts.TranspositionTable,
+
+			// The root position itself terminates the repetition stack: it
+			// precedes every position the search will visit.
+			stack: append(append(make([]uint64, 0, len(opts.History)+maxPly+1), opts.History...), p.hash),
+		}
+
+		// Order the root moves once before the first iteration. Later
+		// iterations reuse the previous iteration's best move instead,
+		// which is a far stronger signal than any static ordering.
+		var rootScores [maxMoves]int32
+		searchCtx.scoreMoves(&rootScores, rootMoves, p, Move(0), 0)
+		for i := range rootMoves {
+			pickNextMove(rootMoves, &rootScores, i)
 		}
 
 	loop:
 		// iterative deepening
-		for depth := 1; depth <= opts.MaxDepth; depth++ {
-			bestMoveAtDepth := Move(0)
+		for depth := 1; depth <= maxDepth; depth++ {
+			bestMoveAtDepth := rootMoves[0]
 			bestScoreAtDepth := -Inf
 			alpha := -Inf
 			beta := Inf
@@ -182,11 +235,18 @@ func SearchBestMove(p *Position, opts *SearchOptions) (chan Evaluation, context.
 
 			}
 
+			// Search this iteration's best move first at the next depth.
+			// This is the main reason iterative deepening pays for itself:
+			// an immediate cutoff on move one shrinks the entire tree.
+			moveToFront(rootMoves, bestMoveAtDepth)
+
 			// inform the current evaluation
 			ch <- Evaluation{
-				Depth: depth,
-				Best:  bestMoveAtDepth,
-				Score: bestScoreAtDepth,
+				Depth:  depth,
+				Best:   bestMoveAtDepth,
+				Score:  bestScoreAtDepth,
+				Nodes:  searchCtx.nodes,
+				QNodes: searchCtx.qnodes,
 			}
 
 			// check for context cancellation
@@ -222,6 +282,18 @@ func filterMoves(allMoves []Move, wantMoves []Move) []Move {
 	return allMoves[:j]
 }
 
+// moveToFront rotates m to the front of moves, preserving the relative order
+// of the moves it displaces. It is a no-op if m is not present.
+func moveToFront(moves []Move, m Move) {
+	for i, cur := range moves {
+		if cur == m {
+			copy(moves[1:i+1], moves[:i])
+			moves[0] = m
+			return
+		}
+	}
+}
+
 // negamax performs a recursive negamax search with Alpha-Beta pruning from
 // position p. It returns the best score achievable and the corresponding
 // move. alpha and beta are the current window bounds; depth is the remaining
@@ -235,17 +307,34 @@ func filterMoves(allMoves []Move, wantMoves []Move) []Move {
 // a terminal position.
 func negamax(ctx *searchCtx, p *Position, moves []Move, alpha, beta, depth, ply int) (int, error) {
 
+	// A position that already occurred on this path, or earlier in the game,
+	// is a draw. This is checked before the transposition table because the
+	// table is path independent and cannot know about repetitions.
+	if ctx.isRepetition(p) {
+		return drawScore, nil
+	}
+
 	// tranposition table enabled
+	var ttMove Move
 	var entry ttEntry
 	if ctx.tt != nil {
 		entry = ctx.tt.get(p.hash)
-		if entry.hash == p.hash && int(entry.depth) >= depth {
-			if entry.flag == exact {
-				return entry.score, nil
-			} else if entry.flag == lowerBound && entry.score >= beta {
-				return beta, nil
-			} else if entry.flag == upperBound && entry.score <= alpha {
-				return alpha, nil
+		if entry.hash == p.hash {
+			// The stored move is worth having even when the stored depth is
+			// too shallow to cut off: ordering it first is where most of the
+			// table's value comes from.
+			ttMove = entry.move
+
+			if int(entry.depth) >= depth {
+				score := scoreFromTT(int(entry.score), ply)
+				switch {
+				case entry.flag == exact:
+					return score, nil
+				case entry.flag == lowerBound && score >= beta:
+					return score, nil
+				case entry.flag == upperBound && score <= alpha:
+					return score, nil
+				}
 			}
 		}
 	}
@@ -261,20 +350,39 @@ func negamax(ctx *searchCtx, p *Position, moves []Move, alpha, beta, depth, ply 
 		if inCheck {
 			return -MateScore + ply, nil
 		} else {
-			return 0, nil
+			return drawScore, nil
 		}
 	}
 
+	// Fifty-move rule. Checked after move generation so that a checkmate
+	// delivered on the hundredth half-move still takes precedence over it.
+	if p.halfMoves >= 100 {
+		return drawScore, nil
+	}
+
+	var scores [maxMoves]int32
+	ctx.scoreMoves(&scores, moves, p, ttMove, ply)
+
 	originalAlpha := alpha
 	bestScore := -Inf
+	bestMove := Move(0)
+
+	// Make this position visible to the subtree below it as a repetition
+	// candidate. Every path out of the loop pops it again.
+	ctx.stack = append(ctx.stack, p.hash)
 
 	var newPos Position
 
-	for _, m := range moves {
+	for i := range moves {
+		// Bring the best remaining move to the front. Doing this lazily
+		// avoids sorting the tail of a list that a cutoff never reaches.
+		pickNextMove(moves, &scores, i)
+		m := moves[i]
 
 		// abort if we exceed the number of nodes
 		ctx.nodes++
 		if ctx.nodes > ctx.maxNodes {
+			ctx.pop()
 			return 0, errMaxNodesReached
 		}
 
@@ -282,6 +390,7 @@ func negamax(ctx *searchCtx, p *Position, moves []Move, alpha, beta, depth, ply 
 		if ctx.nodes%2048 == 0 {
 			select {
 			case <-ctx.Done():
+				ctx.pop()
 				return 0, errContextCancelled
 			default:
 			}
@@ -292,6 +401,7 @@ func negamax(ctx *searchCtx, p *Position, moves []Move, alpha, beta, depth, ply 
 		score, err := negamax(ctx, &newPos, moves[count:], -beta, -alpha, depth-1, ply+1)
 
 		if err != nil {
+			ctx.pop()
 			return 0, err
 		}
 
@@ -299,6 +409,7 @@ func negamax(ctx *searchCtx, p *Position, moves []Move, alpha, beta, depth, ply 
 
 		if score > bestScore {
 			bestScore = score
+			bestMove = m
 		}
 
 		if score > alpha {
@@ -306,9 +417,16 @@ func negamax(ctx *searchCtx, p *Position, moves []Move, alpha, beta, depth, ply 
 		}
 
 		if alpha >= beta {
+			// A quiet move that refutes this node is likely to refute its
+			// siblings too, so remember it before bailing out.
+			if isQuiet(p, m) {
+				ctx.updateQuietHeuristics(p, moves, i, depth, ply)
+			}
 			break
 		}
 	}
+
+	ctx.pop()
 
 	// transposition table enabled
 	if ctx.tt != nil {
@@ -320,14 +438,21 @@ func negamax(ctx *searchCtx, p *Position, moves []Move, alpha, beta, depth, ply 
 		}
 
 		if entry.hash != p.hash || int(entry.depth) <= depth {
-			entry.hash = p.hash
-			entry.score = bestScore
-			entry.depth = depth
-			entry.flag = flag
-			ctx.tt.set(entry)
+			ctx.tt.set(ttEntry{
+				hash:  p.hash,
+				score: int32(scoreToTT(bestScore, ply)),
+				move:  bestMove,
+				depth: int8(depth),
+				flag:  flag,
+			})
 		}
 	}
 	return bestScore, nil
+}
+
+// pop removes the most recently pushed position from the repetition stack.
+func (ctx *searchCtx) pop() {
+	ctx.stack = ctx.stack[:len(ctx.stack)-1]
 }
 
 // quiescence performs a restricted search that only considers "noisy" moves
@@ -350,12 +475,23 @@ func quiescence(ctx *searchCtx, p *Position, moves []Move, alpha, beta int) (int
 		alpha = score
 	}
 
-	//FIXME: it should be captures and promotions
+	// Captures and promotions. Both change material sharply enough that
+	// stopping on one would leave the score mid-swing, which is the horizon
+	// effect quiescence exists to avoid.
 	moves, _ = CaptureMoves(moves, p)
 	count := len(moves)
+
+	// Quiescence is where most of the nodes are spent, and it is almost
+	// entirely captures. Trying the most valuable victim first means a
+	// losing exchange sequence is usually refuted by its first move.
+	var scores [maxMoves]int32
+	scoreCaptures(&scores, moves, p)
+
 	var newPos Position
 
-	for _, m := range moves {
+	for i := range moves {
+		pickNextMove(moves, &scores, i)
+		m := moves[i]
 
 		// abort if max nodes
 		ctx.nodes++

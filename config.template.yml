@@ -23,3 +23,17 @@ challenge:
   modes:
     - rated
     - casual
+
+matchmaking:
+  allow_matchmaking: true
+  allow_during_games: false
+  challenge_variant: "standard"
+  challenge_timeout: 5
+
+  challenge_initial_time:
+    - 300
+
+  challenge_increment:
+    - 3
+
+  challenge_mode: "rated"
