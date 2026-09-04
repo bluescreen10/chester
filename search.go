@@ -165,7 +165,7 @@ func SearchBestMove(p *Position, opts *SearchOptions) (chan Evaluation, context.
 
 		if !opts.DisableBook {
 			if entries, ok := book[p.hash]; ok {
-				move := pickMove(entries)
+				move := pickMove(entries, rand.IntN)
 				ch <- Evaluation{
 					Depth: 1,
 					Best:  move,
@@ -567,10 +567,23 @@ func EvalMaterial(p *Position) int {
 		ePawns - eKnight*3 - eBishop*3 - eRook*5 - eQueen*9) * 100
 }
 
+// BookMove returns a move for position p from the built-in opening book and
+// reports whether the position appears in it at all.
+//
+// intn supplies the randomness, as math/rand/v2's rand.IntN does; passing a
+// seeded generator's IntN method makes a sequence of book moves reproducible.
+func BookMove(p *Position, intn func(int) int) (Move, bool) {
+	entries, ok := book[p.hash]
+	if !ok {
+		return Move(0), false
+	}
+	return pickMove(entries, intn), true
+}
+
 // pickMove selects a move from a set of book entries using weighted random
 // selection. Entries with higher Weight are chosen proportionally more often.
 // If all weights are zero, a move is chosen uniformly at random.
-func pickMove(entries []bookEntry) Move {
+func pickMove(entries []bookEntry, intn func(int) int) Move {
 	var total int
 	for _, m := range entries {
 		total += int(m.Weight)
@@ -580,7 +593,7 @@ func pickMove(entries []bookEntry) Move {
 		return entries[len(entries)-1].Move
 	}
 
-	r := rand.IntN(total)
+	r := intn(total)
 	for _, e := range entries {
 		r -= int(e.Weight)
 		if r < 0 {

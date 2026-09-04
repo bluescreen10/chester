@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"slices"
 )
 
 const (
@@ -378,8 +379,19 @@ func generateBook(w io.Writer, book []bookEntry) {
 		sortedBook[entry.key] = append(sortedBook[entry.key], bookEntry{move: entry.move, weight: entry.weight})
 	}
 
-	fmt.Fprintf(w, "varbookmap[uint64][]bookEntry = map[uint64][]bookEntry{\n")
-	for key, entries := range sortedBook {
+	fmt.Fprintf(w, "var book map[uint64][]bookEntry = map[uint64][]bookEntry{\n")
+
+	// Map iteration order is randomised, so emit the keys in a fixed order.
+	// Without this the generated file differs on every run and the diff is
+	// unreadable even when nothing has actually changed.
+	keys := make([]uint64, 0, len(sortedBook))
+	for key := range sortedBook {
+		keys = append(keys, key)
+	}
+	slices.Sort(keys)
+
+	for _, key := range keys {
+		entries := sortedBook[key]
 		fmt.Fprintf(w, "\t0x%x: []bookEntry{\n", key)
 		for _, entry := range entries {
 			fmt.Fprintf(w, "\t\t{Move: Move(0x%x), Weight: %d},\n", genMove(entry.move), entry.weight)
@@ -389,26 +401,46 @@ func generateBook(w io.Writer, book []bookEntry) {
 	fmt.Fprintf(w, "}\n")
 }
 
+// genMove converts a Polyglot move into the engine's [chester.Move] encoding.
+//
+// Polyglot packs a move as three-bit file and row fields with row 0 at rank 1,
+// while the engine indexes squares from a8, so both squares need their rank
+// flipped. Beyond that there are two special cases:
+//
+//   - Promotion pieces happen to agree. Polyglot numbers them 1=N, 2=B, 3=R,
+//     4=Q, which are the values of Knight, Bishop, Rook and Queen, so the
+//     field moves across unchanged into the move's promotion bits.
+//
+//   - Castling is written as the king capturing its own rook (e1h1), which
+//     the engine encodes as the king moving two squares. A king can never
+//     reach its own corner square in a single ordinary move, so the from and
+//     to squares identify castling on their own.
 func genMove(pm uint16) uint16 {
 	from := (pm>>6)&0x3f ^ 0x38
 	to := pm&0x3f ^ 0x38
-	promo := (pm >> 12) & 0x7
 
-	// promotion: type = 11xx, xx = piece (polyglot: 1=N,2=B,3=R,4=Q → subtract 1)
-	if promo != 0 {
-		return (0xc000 | uint16(promo-1)<<12 | from<<6 | to)
+	if promo := (pm >> 12) & 0x7; promo != 0 {
+		return promo<<12 | from<<6 | to
 	}
 
-	if from == 4 && to == 7 {
-		return (0x8000 | from<<6 | (to - 1)) // 1000 castle king side
-	} else if from == 4 && to == 0 {
-		return (0x9000 | from<<6 | (to + 2))
-	} else if from == 61 && to == 64 {
-		return (0x8000 | from<<6 | (to - 1))
-	} else if from == 61 && to == 56 {
-		return (0x9000 | from<<6 | (to + 2))
+	switch {
+	case from == sqE1 && to == sqH1:
+		to = sqG1
+	case from == sqE1 && to == sqA1:
+		to = sqC1
+	case from == sqE8 && to == sqH8:
+		to = sqG8
+	case from == sqE8 && to == sqA8:
+		to = sqC8
 	}
 
-	// normal move/capture: type = 0xxx, xxx = piece
-	return (from<<6 | to)
+	return from<<6 | to
 }
+
+// Square indices in the engine's encoding, which counts from a8.
+const (
+	sqA8, sqC8, sqE8, sqH8 uint16 = 0, 2, 4, 7
+	sqA1, sqC1, sqE1, sqG1 uint16 = 56, 58, 60, 62
+	sqG8                   uint16 = 6
+	sqH1                   uint16 = 63
+)
