@@ -124,7 +124,7 @@ func (s *UCIServer) error(msg string, args ...any) {
 // handleUCI responds to the "uci" command by identifying the engine and
 // confirming it is ready to use the UCI protocol.
 func (s *UCIServer) handleUCI() {
-	s.WriteString("id name %s", BotName)
+	s.WriteString("id name %s %s", BotName, version)
 	s.WriteString("id author %s", Author)
 	s.WriteString("uciok")
 }

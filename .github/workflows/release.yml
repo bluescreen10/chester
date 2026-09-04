@@ -1,0 +1,72 @@
+# Publishes a multi-arch container image to GitHub Container Registry when a
+# version tag is pushed.
+#
+#   git tag v0.4.3 && git push origin v0.4.3
+#
+# The tag is the only place the version is written down: build.sh derives the
+# image tag and the linker-embedded version from it.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # build.sh runs git describe as a fallback, and reads the tag that
+          # triggered this run. A shallow clone has neither.
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # A tag that does not pass its tests should never reach the registry.
+      # This includes the perft suite, so an illegal move generator fails the
+      # release rather than shipping.
+      - name: Run tests
+        run: go test ./...
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # An image path must be lowercase, but a GitHub owner or repository name
+      # may contain capitals, so it cannot be interpolated directly.
+      - name: Resolve image name
+        id: image
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and publish
+        env:
+          IMAGE: ${{ steps.image.outputs.name }}
+          VERSION: ${{ github.ref_name }}
+          # Hosted runners are shared and noisy, and a CPU profile collected
+          # under contention misattributes time badly enough to be worse than
+          # a slightly stale one. Release builds use the profile committed at
+          # cmd/default.pgo; regenerate it locally and commit it instead.
+          SKIP_PGO: "1"
+        run: ./build.sh
