@@ -128,3 +128,47 @@ func TestSearchWithTT(t *testing.T) {
 		t.Errorf("Transposition table failed t1 (%s) < t2 (%s)", elapsedFirst, elapsedSecond)
 	}
 }
+
+// TestDisableBook covers the option self-play testing depends on. With the
+// book enabled the engine answers a book position instantly at depth 1
+// without searching; with it disabled every move has to come from the search.
+func TestDisableBook(t *testing.T) {
+	lastEval := func(opts *chester.SearchOptions) chester.Evaluation {
+		t.Helper()
+		p, err := chester.ParseFEN(chester.DefaultFEN)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ch, _ := chester.SearchBestMove(p, opts)
+		var last chester.Evaluation
+		for e := range ch {
+			last = e
+		}
+		return last
+	}
+
+	booked := lastEval(&chester.SearchOptions{
+		MaxDepth: 6,
+		MaxTime:  30 * time.Second,
+	})
+	if booked.Depth != 1 || booked.Nodes != 0 {
+		t.Errorf("with the book: depth %d, %d nodes; want a book move at depth 1 with no search",
+			booked.Depth, booked.Nodes)
+	}
+
+	searched := lastEval(&chester.SearchOptions{
+		MaxDepth:    6,
+		MaxTime:     30 * time.Second,
+		DisableBook: true,
+	})
+	if searched.Depth != 6 {
+		t.Errorf("without the book: reached depth %d, want 6", searched.Depth)
+	}
+	if searched.Nodes == 0 {
+		t.Error("without the book: no nodes searched")
+	}
+
+	t.Logf("book: %s (depth %d, %d nodes)   search: %s (depth %d, %d nodes)",
+		booked.Best, booked.Depth, booked.Nodes,
+		searched.Best, searched.Depth, searched.Nodes)
+}

@@ -75,6 +75,14 @@ type SearchOptions struct {
 	// the search see a repetition of a position that was actually reached
 	// earlier in the game, not just one created inside the search tree.
 	History []uint64
+
+	// DisableBook suppresses the built-in opening book, so that every move
+	// comes from the search.
+	//
+	// Self-play testing needs this. With the book on, both sides answer the
+	// opening from the same table and the games measure the book rather than
+	// the change being tested.
+	DisableBook bool
 }
 
 var (
@@ -155,13 +163,15 @@ func SearchBestMove(p *Position, opts *SearchOptions) (chan Evaluation, context.
 	go func() {
 		defer close(ch)
 
-		if entries, ok := book[p.hash]; ok {
-			move := pickMove(entries)
-			ch <- Evaluation{
-				Depth: 1,
-				Best:  move,
+		if !opts.DisableBook {
+			if entries, ok := book[p.hash]; ok {
+				move := pickMove(entries)
+				ch <- Evaluation{
+					Depth: 1,
+					Best:  move,
+				}
+				return
 			}
-			return
 		}
 
 		// The move buffer is shared by every ply: each node carves its own

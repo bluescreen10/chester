@@ -32,12 +32,20 @@ type UCIServer struct {
 	// s.pos in the current game. The search needs it to recognise a draw by
 	// repetition against moves that were actually played.
 	history []uint64
+
+	// ownBook mirrors the UCI option of the same name. When false the engine
+	// must not consult its built-in opening book.
+	ownBook bool
 }
 
 // startUCI initializes a standard UCI session.
 func startUCI() {
 	pos, _ := chester.ParseFEN(chester.DefaultFEN)
-	uci := &UCIServer{pos: pos, tt: chester.NewTranspositionTable(64 * 1024 * 1024)}
+	uci := &UCIServer{
+		pos:     pos,
+		tt:      chester.NewTranspositionTable(64 * 1024 * 1024),
+		ownBook: true,
+	}
 	uci.Start()
 }
 
@@ -81,6 +89,8 @@ func (s *UCIServer) Start() {
 			s.handlePerft(args[1:])
 		case "cpuprofile":
 			s.handleCPUProfile(args[1:])
+		case "setoption":
+			s.handleSetOption(args[1:])
 		case "debug":
 			s.handleDebug(args[1:])
 		default:
@@ -126,7 +136,51 @@ func (s *UCIServer) error(msg string, args ...any) {
 func (s *UCIServer) handleUCI() {
 	s.WriteString("id name %s %s", BotName, version)
 	s.WriteString("id author %s", Author)
+	s.WriteString("option name OwnBook type check default true")
 	s.WriteString("uciok")
+}
+
+// handleSetOption responds to "setoption name <id> [value <x>]".
+//
+// Both an option name and its value may contain spaces, so the arguments are
+// split on the "name" and "value" keywords rather than on whitespace. Names
+// are compared case-insensitively: the spelling in the option declaration is
+// what a GUI echoes back, but tooling is not consistent about it.
+func (s *UCIServer) handleSetOption(args []string) {
+	var name, value []string
+
+	field := &name
+	for _, arg := range args {
+		switch arg {
+		case "name":
+			field = &name
+		case "value":
+			field = &value
+		default:
+			*field = append(*field, arg)
+		}
+	}
+
+	id := strings.ToLower(strings.Join(name, " "))
+	val := strings.TrimSpace(strings.Join(value, " "))
+
+	switch id {
+	case "ownbook":
+		switch strings.ToLower(val) {
+		case "true":
+			s.ownBook = true
+		case "false":
+			s.ownBook = false
+		default:
+			s.error("invalid value for OwnBook: %q", val)
+			return
+		}
+		s.debug("OwnBook set to %v", s.ownBook)
+	default:
+		// An unknown option is not an error worth failing on: the protocol
+		// expects an engine to ignore what it does not implement.
+		s.debug("ignoring unknown option: %s", id)
+	}
 }
 
 // handleUCINewGame responds to the "ucinewgame" command by resetting the
@@ -204,6 +258,7 @@ func (s *UCIServer) handleGo(args []string) {
 	opts := &chester.SearchOptions{
 		MaxDepth:           100,
 		History:            s.history,
+		DisableBook:        !s.ownBook,
 		MaxNodes:           math.MaxInt64,
 		TranspositionTable: s.tt,
 	}
