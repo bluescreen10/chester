@@ -205,6 +205,10 @@ func SearchBestMove(p *Position, opts *SearchOptions) (chan Evaluation, context.
 			stack: append(append(make([]uint64, 0, len(opts.History)+maxPly+1), opts.History...), p.hash),
 		}
 
+		// The root state is the only one computed from scratch. Every node
+		// below it derives its own from its parent's.
+		rootAcc := NewPestoState(p)
+
 		// Order the root moves once before the first iteration. Later
 		// iterations reuse the previous iteration's best move instead,
 		// which is a far stronger signal than any static ordering.
@@ -228,7 +232,7 @@ func SearchBestMove(p *Position, opts *SearchOptions) (chan Evaluation, context.
 				newPos = *p
 				newPos.Do(m)
 
-				score, err := negamax(searchCtx, &newPos, rootMoves[count:], -beta, -alpha, depth-1, 1)
+				score, err := negamax(searchCtx, &newPos, rootAcc.Updated(p, &newPos), rootMoves[count:], -beta, -alpha, depth-1, 1)
 				if err != nil {
 					break loop
 				}
@@ -315,7 +319,7 @@ func moveToFront(moves []Move, m Move) {
 // moves; stalemate when there are no legal moves and the king is not in
 // check. Both are handled before recursing so that eval is never called on
 // a terminal position.
-func negamax(ctx *searchCtx, p *Position, moves []Move, alpha, beta, depth, ply int) (int, error) {
+func negamax(ctx *searchCtx, p *Position, acc PestoState, moves []Move, alpha, beta, depth, ply int) (int, error) {
 
 	// A position that already occurred on this path, or earlier in the game,
 	// is a draw. This is checked before the transposition table because the
@@ -351,7 +355,7 @@ func negamax(ctx *searchCtx, p *Position, moves []Move, alpha, beta, depth, ply 
 	}
 
 	if depth == 0 {
-		return quiescence(ctx, p, moves, alpha, beta)
+		return quiescence(ctx, p, acc, moves, alpha, beta)
 	}
 
 	moves, inCheck := LegalMoves(moves, p)
@@ -409,7 +413,7 @@ func negamax(ctx *searchCtx, p *Position, moves []Move, alpha, beta, depth, ply 
 
 		newPos = *p
 		newPos.Do(m)
-		score, err := negamax(ctx, &newPos, moves[count:], -beta, -alpha, depth-1, ply+1)
+		score, err := negamax(ctx, &newPos, acc.Updated(p, &newPos), moves[count:], -beta, -alpha, depth-1, ply+1)
 
 		if err != nil {
 			ctx.pop()
@@ -477,8 +481,8 @@ func (ctx *searchCtx) pop() {
 // It returns a score that represents the settled value of the position.
 // If the search is interrupted by a timeout or node limit, it returns
 // an error to ensure the partial result is discarded.
-func quiescence(ctx *searchCtx, p *Position, moves []Move, alpha, beta int) (int, error) {
-	score := EvalPesto(p)
+func quiescence(ctx *searchCtx, p *Position, acc PestoState, moves []Move, alpha, beta int) (int, error) {
+	score := acc.Score(p.active, p.inactive)
 
 	if score >= beta {
 		return beta, nil
@@ -524,7 +528,7 @@ func quiescence(ctx *searchCtx, p *Position, moves []Move, alpha, beta int) (int
 		newPos = *p
 		newPos.Do(m)
 
-		score, err := quiescence(ctx, &newPos, moves[count:], -beta, -alpha)
+		score, err := quiescence(ctx, &newPos, acc.Updated(p, &newPos), moves[count:], -beta, -alpha)
 
 		if err != nil {
 			return 0, err
@@ -775,41 +779,42 @@ func init() {
 
 // EvalPesto calculates a static evaluation using the PeSTO method.
 // Returns a score in centipawns based on PST and game phase.
+//
+// The board is walked one piece at a time through the piece bitboards rather
+// than one square at a time. A position has at most thirty-two pieces and
+// usually far fewer, so scanning all sixty-four squares spends most of its
+// iterations establishing that a square is empty.
 func EvalPesto(p *Position) int {
-	var mg [2]int
-	var eg [2]int
+	var mg, eg [2]int
 	gamePhase := 0
 
-	mg[White] = 0
-	mg[Black] = 0
-	eg[White] = 0
-	eg[Black] = 0
+	for color := White; color <= Black; color++ {
+		own := p.allPieces[color]
 
-	whiteBB := p.WhitePieces()
+		for piece := Pawn; piece <= King; piece++ {
+			var sq Square
 
-	bb := Bitboard(1)
-	for sq := range Square(64) {
-		piece := p.mailbox[sq]
-		if piece != Empty {
-			if bb&whiteBB != 0 {
-				mg[White] += mgTable[White][piece][sq]
-				eg[White] += egTable[White][piece][sq]
-			} else {
-				mg[Black] += mgTable[Black][piece][sq]
-				eg[Black] += egTable[Black][piece][sq]
+			for bb := p.pieces[piece] & own; bb != 0; {
+				sq, bb = bb.PopLSB()
+
+				mg[color] += mgTable[color][piece][sq]
+				eg[color] += egTable[color][piece][sq]
+				gamePhase += gamephaseInc[piece]
 			}
-			gamePhase += gamephaseInc[piece]
 		}
-		bb <<= 1
 	}
 
 	mgScore := mg[p.active] - mg[p.inactive]
 	egScore := eg[p.active] - eg[p.inactive]
+
+	// The phase interpolates between the middlegame and endgame tables. It
+	// saturates because promotions can put more material on the board than
+	// the opening started with.
 	mgPhase := gamePhase
 	if mgPhase > 24 {
 		mgPhase = 24
 	}
-
 	egPhase := 24 - mgPhase
+
 	return (mgScore*mgPhase + egScore*egPhase) / 24
 }
