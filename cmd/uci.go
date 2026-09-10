@@ -16,6 +16,21 @@ import (
 	"github.com/bluescreen10/chester"
 )
 
+// Transposition table sizes, in mebibytes.
+//
+// The default is large enough that a search does not churn the table from end
+// to end: at 256 MiB a depth-9 search overwrites each entry roughly once and a
+// half, where 64 MiB overwrote it six times, discarding results that were
+// about to be needed again.
+//
+// The requested size is rounded down to a power-of-two bucket count, so a
+// value between two powers of two yields the lower one.
+const (
+	defaultHashMB = 64
+	minHashMB     = 1
+	maxHashMB     = 32768
+)
+
 // UCIServer handles communication between the chess engine and a UCI-compliant
 // GUI. It manages the engine's state, position, and search execution.
 type UCIServer struct {
@@ -43,7 +58,7 @@ func startUCI() {
 	pos, _ := chester.ParseFEN(chester.DefaultFEN)
 	uci := &UCIServer{
 		pos:     pos,
-		tt:      chester.NewTranspositionTable(64 * 1024 * 1024),
+		tt:      chester.NewTranspositionTable(defaultHashMB * 1024 * 1024),
 		ownBook: true,
 	}
 	uci.Start()
@@ -136,6 +151,8 @@ func (s *UCIServer) error(msg string, args ...any) {
 func (s *UCIServer) handleUCI() {
 	s.WriteString("id name %s %s", BotName, version)
 	s.WriteString("id author %s", Author)
+	s.WriteString("option name Hash type spin default %d min %d max %d",
+		defaultHashMB, minHashMB, maxHashMB)
 	s.WriteString("option name OwnBook type check default true")
 	s.WriteString("uciok")
 }
@@ -165,6 +182,25 @@ func (s *UCIServer) handleSetOption(args []string) {
 	val := strings.TrimSpace(strings.Join(value, " "))
 
 	switch id {
+	case "hash":
+		// Replacing the table while a search is reading it would leave that
+		// search on the old one, which is harmless but not what the caller
+		// asked for. The protocol only permits setoption between searches.
+		if s.stopFunc != nil {
+			s.error("cannot resize Hash while searching")
+			return
+		}
+
+		mb, err := strconv.Atoi(val)
+		if err != nil || mb < minHashMB || mb > maxHashMB {
+			s.error("invalid value for Hash: %q (want an integer %d-%d)", val, minHashMB, maxHashMB)
+			return
+		}
+
+		s.tt = chester.NewTranspositionTable(uint64(mb) * 1024 * 1024)
+		s.debug("Hash set to %d MiB, using %d MiB after rounding",
+			mb, s.tt.SizeBytes()/(1024*1024))
+
 	case "ownbook":
 		switch strings.ToLower(val) {
 		case "true":
@@ -187,6 +223,11 @@ func (s *UCIServer) handleSetOption(args []string) {
 // board to the starting position.
 func (s *UCIServer) handleUCINewGame() {
 	s.resetPosition()
+
+	// Nothing in the table describes a position the new game can reach, and
+	// an engine process that plays many games would otherwise accumulate
+	// entries from all of them.
+	s.tt.Clear()
 }
 
 // handlePosition responds to the "position" command, which sets up the board

@@ -205,6 +205,11 @@ func SearchBestMove(p *Position, opts *SearchOptions) (chan Evaluation, context.
 			stack: append(append(make([]uint64, 0, len(opts.History)+maxPly+1), opts.History...), p.hash),
 		}
 
+		// Everything already in the table belongs to an earlier search from
+		// here on, which is what lets stale entries be evicted ahead of
+		// shallow ones computed for the position actually on the board.
+		opts.TranspositionTable.NewSearch()
+
 		// The root state is the only one computed from scratch. Every node
 		// below it derives its own from its parent's.
 		rootAcc := NewPestoState(p)
@@ -330,11 +335,8 @@ func negamax(ctx *searchCtx, p *Position, acc PestoState, moves []Move, alpha, b
 
 	// tranposition table enabled
 	var ttMove Move
-	var entry ttEntry
-	var ok bool
 	if ctx.tt != nil {
-		entry, ok = ctx.tt.get(p.hash)
-		if ok {
+		if entry, ok := ctx.tt.get(p.hash); ok {
 			// The entry move is worth having even when the entry depth is
 			// too shallow to cut off: ordering it first is where most of the
 			// table's value comes from.
@@ -452,16 +454,15 @@ func negamax(ctx *searchCtx, p *Position, acc PestoState, moves []Move, alpha, b
 			flag = lowerBound
 		}
 
-		// Depth-preferred replacement: keep what is there only if it is the
-		// same position searched deeper than this.
-		if !ok || int(entry.depth) <= depth {
-			ctx.tt.set(p.hash, ttEntry{
-				score: int32(scoreToTT(bestScore, ply)),
-				move:  bestMove,
-				depth: int8(depth),
-				flag:  flag,
-			})
-		}
+		// Which record to give up is the table's decision: it can see what is
+		// in the bucket now, whereas the entry probed on the way in is a
+		// snapshot from before this whole subtree ran.
+		ctx.tt.set(p.hash, ttEntry{
+			score: int32(scoreToTT(bestScore, ply)),
+			move:  bestMove,
+			depth: int8(depth),
+			flag:  flag,
+		})
 	}
 	return bestScore, nil
 }
