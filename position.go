@@ -464,6 +464,49 @@ func (p *Position) Do(m Move) {
 	p.active, p.inactive = p.inactive, p.active
 }
 
+// DoNull passes the turn to the opponent without moving anything.
+//
+// This is not a legal chess move. It exists for null move pruning, which asks
+// what the position would be worth if the opponent were handed a free move.
+//
+// It mirrors the bookkeeping [Position.Do] does around the pieces: the en
+// passant right is given up, the half-move clock advances, and the hash is
+// updated for both. The en passant key is only folded out when an adjacent
+// enemy pawn could actually have captured, because that is the condition
+// under which Do folded it in -- get this wrong and the null move produces a
+// hash that collides with unrelated positions in the transposition table.
+func (p *Position) DoNull() {
+	enPassantTarget := p.enPassantTarget
+	p.enPassantTarget = SQ_NULL
+	p.halfMoves++
+
+	if enPassantTarget != SQ_NULL {
+		var pawnSq Square
+		if p.active == White {
+			pawnSq = enPassantTarget + 8 // black pawn moved to higher index
+		} else {
+			pawnSq = enPassantTarget - 8 // white pawn moved to lower index
+		}
+		if p.adjacentPawns(p.active, pawnSq) {
+			p.hash ^= polyglotTable.EnPassant[enPassantTarget.File()]
+		}
+	}
+
+	p.hash ^= polyglotTable.WhiteToMove
+	p.fullMoves += uint16(p.active)
+	p.active, p.inactive = p.inactive, p.active
+}
+
+// HasNonPawnMaterial reports whether the given color has a piece other than
+// pawns and its king.
+//
+// It is the test for whether zugzwang is a live risk. With only pawns left,
+// having to move is often a disadvantage, so the assumption null move pruning
+// rests on -- that passing is never better than moving -- stops holding.
+func (p *Position) HasNonPawnMaterial(c Color) bool {
+	return p.allPieces[c]&^(p.pieces[Pawn]|p.pieces[King]) != 0
+}
+
 // Get returns the piece occupying sq, or Empty if the square is unoccupied.
 func (p *Position) Get(sq Square) Piece {
 	return p.mailbox[sq]
@@ -727,9 +770,23 @@ func computeHash(p *Position) uint64 {
 
 	hash ^= polyglotTable.Castling[p.castlingRights]
 
-	if p.enPassantTarget != SQ_NULL && p.adjacentPawns(p.active, p.enPassantTarget) {
-		file := p.enPassantTarget.File()
-		hash ^= polyglotTable.EnPassant[file]
+	// Polyglot folds in the en passant key only when the capture is actually
+	// available, and the pawn that would make it stands beside the pawn that
+	// double-pushed -- not beside the square it is captured on. Testing
+	// adjacency to the target square instead looks for pawns one rank too far
+	// forward, which is a different set of squares entirely, so the same
+	// position hashed here and hashed by Do would disagree.
+	if p.enPassantTarget != SQ_NULL {
+		var pushedTo Square
+		if p.active == White {
+			pushedTo = p.enPassantTarget + 8 // black pawn moved to higher index
+		} else {
+			pushedTo = p.enPassantTarget - 8 // white pawn moved to lower index
+		}
+
+		if p.adjacentPawns(p.active, pushedTo) {
+			hash ^= polyglotTable.EnPassant[p.enPassantTarget.File()]
+		}
 	}
 
 	if p.Active() == White {

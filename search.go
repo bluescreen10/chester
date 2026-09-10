@@ -377,6 +377,54 @@ func negamax(ctx *searchCtx, p *Position, acc PestoState, moves []Move, alpha, b
 		return drawScore, nil
 	}
 
+	// Null move pruning.
+	//
+	// Hand the opponent a free move. If the position is still good enough
+	// afterwards to fail high, it is good enough that the opponent would
+	// never have permitted it in the first place, and searching the real
+	// moves cannot change that conclusion -- so return the bound instead.
+	//
+	// The search is reduced because it only has to answer a yes/no question,
+	// and it is given a null window around beta for the same reason.
+	//
+	// Each guard keeps the underlying assumption true:
+	//
+	//   - In check there is nothing to reason about: passing is not among
+	//     the options, and the opponent's free move would simply take the
+	//     king.
+	//   - With only pawns and a king, zugzwang is common. There, being
+	//     obliged to move is a disadvantage, so passing would be better than
+	//     any legal move and the whole inference inverts.
+	//   - Below a few plies the reduced search proves too little to pay for
+	//     itself.
+	//   - A beta that is already a mate score makes the question meaningless.
+	if !inCheck && depth >= 3 && beta < mateThreshold && p.HasNonPawnMaterial(p.active) {
+		reduction := 2 + depth/6
+
+		nullPos := *p
+		nullPos.DoNull()
+
+		ctx.nodes++
+
+		// A null move moves no pieces, so the evaluation accumulator carries
+		// over untouched; only the side it is read from changes, and Score
+		// takes that from the position.
+		score, err := negamax(ctx, &nullPos, acc, moves[count:], -beta, -beta+1, depth-1-reduction, ply+1)
+		if err != nil {
+			return 0, err
+		}
+		score = -score
+
+		if score >= beta {
+			// A mate proved by giving away a free move is not a mate that
+			// exists, so report the bound rather than the claim.
+			if score >= mateThreshold {
+				score = beta
+			}
+			return score, nil
+		}
+	}
+
 	var scores [maxMoves]int32
 	ctx.scoreMoves(&scores, moves, p, ttMove, ply)
 
