@@ -231,17 +231,39 @@ func SearchBestMove(p *Position, opts *SearchOptions) (chan Evaluation, context.
 			alpha := -Inf
 			beta := Inf
 
+			// first marks the move that gets the full window; the rest are
+			// probed with a null window and re-searched only if they beat it.
+			// Root moves are never reduced -- there are few of them and the
+			// answer the whole search exists to produce is chosen here.
+
 			// evaluate each root move
-			for _, m := range rootMoves {
+			for i, m := range rootMoves {
 
 				newPos = *p
 				newPos.Do(m)
 
-				score, err := negamax(searchCtx, &newPos, rootAcc.Updated(p, &newPos), rootMoves[count:], -beta, -alpha, depth-1, 1)
+				childAcc := rootAcc.Updated(p, &newPos)
+				childMoves := rootMoves[count:]
+
+				var score, child int
+				var err error
+
+				if i == 0 {
+					child, err = negamax(searchCtx, &newPos, childAcc, childMoves, -beta, -alpha, depth-1, 1)
+					score = -child
+				} else {
+					child, err = negamax(searchCtx, &newPos, childAcc, childMoves, -alpha-1, -alpha, depth-1, 1)
+					score = -child
+
+					if err == nil && score > alpha {
+						child, err = negamax(searchCtx, &newPos, childAcc, childMoves, -beta, -alpha, depth-1, 1)
+						score = -child
+					}
+				}
+
 				if err != nil {
 					break loop
 				}
-				score = -score
 
 				if score > bestScoreAtDepth {
 					bestScoreAtDepth = score
@@ -356,7 +378,7 @@ func negamax(ctx *searchCtx, p *Position, acc PestoState, moves []Move, alpha, b
 		}
 	}
 
-	if depth == 0 {
+	if depth <= 0 {
 		return quiescence(ctx, p, acc, moves, alpha, beta)
 	}
 
@@ -463,14 +485,54 @@ func negamax(ctx *searchCtx, p *Position, acc PestoState, moves []Move, alpha, b
 
 		newPos = *p
 		newPos.Do(m)
-		score, err := negamax(ctx, &newPos, acc.Updated(p, &newPos), moves[count:], -beta, -alpha, depth-1, ply+1)
+
+		childAcc := acc.Updated(p, &newPos)
+		childMoves := moves[count:]
+
+		// Late move reductions.
+		//
+		// The ordering has already said this move is unlikely to be best, so
+		// search it shallower and see whether it argues otherwise. Only quiet
+		// moves are reduced: a capture is ordered by the material it wins and
+		// is not late in any meaningful sense.
+		reduction := 0
+		if depth >= lmrMinDepth && i >= lmrMinMove && !inCheck && isQuiet(p, m) {
+			reduction = lmrReduction(depth, i)
+		}
+
+		var score, child int
+		var err error
+
+		if i == 0 {
+			// The first move sets the standard the rest are measured against,
+			// so it gets the full window at full depth.
+			child, err = negamax(ctx, &newPos, childAcc, childMoves, -beta, -alpha, depth-1, ply+1)
+			score = -child
+		} else {
+			// The cheap question first: is this better than alpha at all?
+			child, err = negamax(ctx, &newPos, childAcc, childMoves, -alpha-1, -alpha, depth-1-reduction, ply+1)
+			score = -child
+
+			// A reduced search that beat alpha proved nothing about what the
+			// move is worth at full depth, so the reduction has to be paid
+			// back before the result is believed.
+			if err == nil && reduction > 0 && score > alpha {
+				child, err = negamax(ctx, &newPos, childAcc, childMoves, -alpha-1, -alpha, depth-1, ply+1)
+				score = -child
+			}
+
+			// Still ahead of alpha with the reduction gone: it is a real
+			// candidate and needs an exact value rather than a bound.
+			if err == nil && score > alpha && score < beta {
+				child, err = negamax(ctx, &newPos, childAcc, childMoves, -beta, -alpha, depth-1, ply+1)
+				score = -child
+			}
+		}
 
 		if err != nil {
 			ctx.pop()
 			return 0, err
 		}
-
-		score = -score
 
 		if score > bestScore {
 			bestScore = score

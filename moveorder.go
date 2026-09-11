@@ -1,5 +1,7 @@
 package chester
 
+import "math"
+
 // Move ordering is what makes alpha-beta pruning effective. Searching the
 // best move first lets every remaining move at that node be refuted by a
 // null-window-sized amount of work, which is the difference between an
@@ -234,4 +236,55 @@ func (ctx *searchCtx) updateQuietHeuristics(p *Position, moves []Move, i, depth,
 			ctx.updateHistory(us, tried, -bonus)
 		}
 	}
+}
+
+// Late move reduction parameters.
+const (
+	// lmrMinDepth is the shallowest node worth reducing at. Below it the
+	// reduced search proves too little to pay for a possible re-search.
+	lmrMinDepth = 3
+
+	// lmrMinMove is the first move index that gets reduced. The move the
+	// ordering picked first, and the couple behind it, are the ones most
+	// likely to be best and are searched in full.
+	lmrMinMove = 3
+)
+
+// lmrTable holds the reduction for a given depth and move index.
+//
+// The reduction grows with both, and logarithmically rather than linearly:
+// the twentieth move at a node is only a little more suspect than the tenth,
+// while the difference between the first and the fourth is large. Reducing
+// linearly would throw away far too much at high move counts.
+var lmrTable [maxPly][maxMoves]int8
+
+func init() {
+	for depth := 1; depth < maxPly; depth++ {
+		for move := 1; move < maxMoves; move++ {
+			r := 0.75 + math.Log(float64(depth))*math.Log(float64(move))/2.25
+			lmrTable[depth][move] = int8(r)
+		}
+	}
+}
+
+// lmrReduction returns how many plies to take off the search of the move at
+// index i, given the depth remaining. The result never leaves less than a
+// single ply, so the reduced search still looks at something.
+func lmrReduction(depth, i int) int {
+	if depth >= maxPly {
+		depth = maxPly - 1
+	}
+	if i >= maxMoves {
+		i = maxMoves - 1
+	}
+
+	reduction := int(lmrTable[depth][i])
+	if reduction > depth-2 {
+		reduction = depth - 2
+	}
+	if reduction < 0 {
+		reduction = 0
+	}
+
+	return reduction
 }
