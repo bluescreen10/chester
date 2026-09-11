@@ -605,7 +605,7 @@ func quiescence(ctx *searchCtx, p *Position, acc PestoState, moves []Move, alpha
 	// Captures and promotions. Both change material sharply enough that
 	// stopping on one would leave the score mid-swing, which is the horizon
 	// effect quiescence exists to avoid.
-	moves, _ = NoisyMoves(moves, p)
+	moves, inCheck := NoisyMoves(moves, p)
 	count := len(moves)
 
 	// Quiescence is where most of the nodes are spent, and it is almost
@@ -619,6 +619,17 @@ func quiescence(ctx *searchCtx, p *Position, acc PestoState, moves []Move, alpha
 	for i := range moves {
 		pickNextMove(moves, &scores, i)
 		m := moves[i]
+
+		// Losing captures are not worth searching. Quiescence exists to
+		// settle exchanges, and an exchange that static evaluation can
+		// already show loses material settles itself.
+		//
+		// While in check this is suspended: the only moves here are the ones
+		// that answer the check, and a losing capture may be the only legal
+		// reply there is.
+		if !inCheck && !seeGE(p, m, 0) {
+			continue
+		}
 
 		// abort if max nodes
 		ctx.nodes++
