@@ -19,13 +19,17 @@ type engine struct {
 	name string
 	path string
 
+	// threads is the value to give the Threads option, or zero to leave the
+	// engine at its own default.
+	threads int
+
 	cmd   *exec.Cmd
 	stdin io.WriteCloser
 	lines chan string
 	errs  chan error
 }
 
-func startEngine(path, name string) (*engine, error) {
+func startEngine(path, name string, threads int) (*engine, error) {
 	cmd := exec.Command(path)
 
 	stdin, err := cmd.StdinPipe()
@@ -41,12 +45,13 @@ func startEngine(path, name string) (*engine, error) {
 	}
 
 	e := &engine{
-		name:  name,
-		path:  path,
-		cmd:   cmd,
-		stdin: stdin,
-		lines: make(chan string, 256),
-		errs:  make(chan error, 1),
+		name:    name,
+		path:    path,
+		threads: threads,
+		cmd:     cmd,
+		stdin:   stdin,
+		lines:   make(chan string, 256),
+		errs:    make(chan error, 1),
 	}
 
 	go func() {
@@ -85,6 +90,16 @@ func (e *engine) handshake() error {
 	if err := e.send("setoption name OwnBook value false"); err != nil {
 		return err
 	}
+
+	// An engine that does not implement Threads ignores the option, which is
+	// what the protocol asks of it, so this is safe to send to a baseline
+	// that predates the parallel search.
+	if e.threads > 0 {
+		if err := e.send("setoption name Threads value %d", e.threads); err != nil {
+			return err
+		}
+	}
+
 	return e.ready()
 }
 

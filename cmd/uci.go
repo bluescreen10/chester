@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"os/signal"
+	"runtime"
 	"runtime/pprof"
 	"strconv"
 	"strings"
@@ -31,6 +32,36 @@ const (
 	maxHashMB     = 32768
 )
 
+// Search thread counts.
+const (
+	minThreads = 1
+	maxThreads = 512
+)
+
+// defaultThreads is how many search threads the engine uses unless a GUI says
+// otherwise: as many as the Go runtime will run in parallel.
+//
+// GOMAXPROCS rather than NumCPU, because under a container CPU quota the two
+// disagree -- NumCPU reports the host's cores and would have the engine
+// oversubscribe whatever slice it was actually given, which costs more than
+// the extra threads are worth.
+//
+// Note that the library's own default is still a single thread: only one
+// thread gives the same result twice, and that reproducibility is what makes
+// a change verifiable. Choosing to trade it away belongs at the application
+// boundary, not inside the search.
+func defaultThreads() int {
+	n := runtime.GOMAXPROCS(0)
+
+	switch {
+	case n < minThreads:
+		return minThreads
+	case n > maxThreads:
+		return maxThreads
+	}
+	return n
+}
+
 // UCIServer handles communication between the chess engine and a UCI-compliant
 // GUI. It manages the engine's state, position, and search execution.
 type UCIServer struct {
@@ -51,6 +82,10 @@ type UCIServer struct {
 	// ownBook mirrors the UCI option of the same name. When false the engine
 	// must not consult its built-in opening book.
 	ownBook bool
+
+	// threads mirrors the UCI option of the same name: how many search
+	// threads the engine may use.
+	threads int
 }
 
 // startUCI initializes a standard UCI session.
@@ -60,6 +95,7 @@ func startUCI() {
 		pos:     pos,
 		tt:      chester.NewTranspositionTable(defaultHashMB * 1024 * 1024),
 		ownBook: true,
+		threads: defaultThreads(),
 	}
 	uci.Start()
 }
@@ -153,6 +189,8 @@ func (s *UCIServer) handleUCI() {
 	s.WriteString("id author %s", Author)
 	s.WriteString("option name Hash type spin default %d min %d max %d",
 		defaultHashMB, minHashMB, maxHashMB)
+	s.WriteString("option name Threads type spin default %d min %d max %d",
+		defaultThreads(), minThreads, maxThreads)
 	s.WriteString("option name OwnBook type check default true")
 	s.WriteString("uciok")
 }
@@ -200,6 +238,21 @@ func (s *UCIServer) handleSetOption(args []string) {
 		s.tt = chester.NewTranspositionTable(uint64(mb) * 1024 * 1024)
 		s.debug("Hash set to %d MiB, using %d MiB after rounding",
 			mb, s.tt.SizeBytes()/(1024*1024))
+
+	case "threads":
+		if s.stopFunc != nil {
+			s.error("cannot change Threads while searching")
+			return
+		}
+
+		n, err := strconv.Atoi(val)
+		if err != nil || n < minThreads || n > maxThreads {
+			s.error("invalid value for Threads: %q (want an integer %d-%d)", val, minThreads, maxThreads)
+			return
+		}
+
+		s.threads = n
+		s.debug("Threads set to %d", s.threads)
 
 	case "ownbook":
 		switch strings.ToLower(val) {
@@ -300,6 +353,7 @@ func (s *UCIServer) handleGo(args []string) {
 		MaxDepth:           100,
 		History:            s.history,
 		DisableBook:        !s.ownBook,
+		Threads:            s.threads,
 		MaxNodes:           math.MaxInt64,
 		TranspositionTable: s.tt,
 	}

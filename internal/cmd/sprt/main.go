@@ -49,6 +49,8 @@ func main() {
 		beta        = flag.Float64("beta", 0.05, "probability of accepting H0 when H1 is true")
 		maxPlies    = flag.Int("maxplies", 400, "adjudicate a game as drawn after this many plies")
 		seed        = flag.Uint64("seed", 1, "seed for shuffling the openings")
+		candThreads = flag.Int("threads", 0, "Threads option for the candidate (0 leaves its default)")
+		baseThreads = flag.Int("baseline-threads", 0, "Threads option for the baseline (0 leaves its default)")
 	)
 	flag.Parse()
 
@@ -57,6 +59,7 @@ func main() {
 		openings: *openingFile, tc: *tcSpec, concurrency: *concurrency,
 		maxGames: *maxGames, elo0: *elo0, elo1: *elo1, alpha: *alpha, beta: *beta,
 		maxPlies: *maxPlies, seed: *seed,
+		candThreads: *candThreads, baseThreads: *baseThreads,
 	}); err != nil {
 		fmt.Fprintf(os.Stderr, "sprt: %s\n", err)
 		os.Exit(1)
@@ -69,6 +72,7 @@ type config struct {
 	concurrency, maxGames, maxPlies    int
 	elo0, elo1, alpha, beta            float64
 	seed                               uint64
+	candThreads, baseThreads           int
 }
 
 func run(cfg config) error {
@@ -121,7 +125,12 @@ func run(cfg config) error {
 	}
 
 	lower, upper := sprtBounds(cfg.alpha, cfg.beta)
-	fmt.Printf("\n%d openings, tc %s, %d threads\n", len(openings), cfg.tc, workers)
+	fmt.Printf("\n%d openings, tc %s, %d games in parallel", len(openings), cfg.tc, workers)
+	if cfg.candThreads > 0 || cfg.baseThreads > 0 {
+		fmt.Printf(", candidate on %d search threads, baseline on %d",
+			max(cfg.candThreads, 1), max(cfg.baseThreads, 1))
+	}
+	fmt.Println()
 	fmt.Printf("H0: %+.1f Elo   H1: %+.1f Elo   bounds [%.2f, %.2f]\n\n",
 		cfg.elo0, cfg.elo1, lower, upper)
 	fmt.Printf("%7s %6s %6s %6s %10s %8s\n", "games", "W", "L", "D", "elo", "LLR")
@@ -154,7 +163,7 @@ func run(cfg config) error {
 		go func() {
 			defer wg.Done()
 
-			cand, err := startEngine(candPath, "candidate")
+			cand, err := startEngine(candPath, "candidate", cfg.candThreads)
 			if err != nil {
 				failMu.Lock()
 				failures = append(failures, err)
@@ -164,7 +173,7 @@ func run(cfg config) error {
 			}
 			defer cand.close()
 
-			base, err := startEngine(basePath, "baseline")
+			base, err := startEngine(basePath, "baseline", cfg.baseThreads)
 			if err != nil {
 				failMu.Lock()
 				failures = append(failures, err)

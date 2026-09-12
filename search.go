@@ -5,6 +5,8 @@ import (
 	"errors"
 	"math"
 	"math/rand/v2"
+	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -76,6 +78,11 @@ type SearchOptions struct {
 	// earlier in the game, not just one created inside the search tree.
 	History []uint64
 
+	// Threads is how many search threads to run. Zero or one searches on a
+	// single thread, which is the only configuration whose node counts are
+	// reproducible from one run to the next.
+	Threads int
+
 	// DisableBook suppresses the built-in opening book, so that every move
 	// comes from the search.
 	//
@@ -140,6 +147,62 @@ type searchCtx struct {
 	// being searched: the game history supplied by the caller, followed by
 	// the positions along the current search path. See isRepetition.
 	stack []uint64
+
+	// moves is this thread's move buffer. Every ply carves its own slice off
+	// the tail of its parent's, so one buffer serves the whole search -- but
+	// it cannot be shared between threads.
+	moves []Move
+
+	// totals aggregates node counts across threads for reporting. Threads
+	// publish their deltas once per completed iteration, so the shared
+	// counters are never touched from the hot path.
+	totals *searchTotals
+
+	// publishedNodes and publishedQNodes are how much of this thread's count
+	// has already been folded into totals.
+	publishedNodes, publishedQNodes int64
+}
+
+// searchTotals carries the node counts of every thread in a search.
+type searchTotals struct {
+	nodes  atomic.Int64
+	qnodes atomic.Int64
+}
+
+// publish folds this thread's progress into the shared totals.
+func (ctx *searchCtx) publish() {
+	ctx.totals.nodes.Add(ctx.nodes - ctx.publishedNodes)
+	ctx.totals.qnodes.Add(ctx.qnodes - ctx.publishedQNodes)
+	ctx.publishedNodes, ctx.publishedQNodes = ctx.nodes, ctx.qnodes
+}
+
+// newSearchCtx builds one thread's state. The fields that are shared -- the
+// cancellation context, the table, the node limit -- are copied in by value
+// so that reading them costs no indirection on the hot path; everything the
+// search mutates belongs to this thread alone.
+func newSearchCtx(ctx context.Context, opts *SearchOptions, threads int, totals *searchTotals, rootHash uint64) *searchCtx {
+	// The node limit is a budget for the search as a whole, so it is shared
+	// out between the threads. Each thread policing the full figure would let
+	// a search of N threads visit N times what was asked for.
+	maxNodes := opts.MaxNodes / int64(threads)
+	if maxNodes < 1 {
+		maxNodes = 1
+	}
+
+	return &searchCtx{
+		Context:  ctx,
+		tt:       opts.TranspositionTable,
+		maxNodes: maxNodes,
+		totals:   totals,
+
+		// The root position itself terminates the repetition stack: it
+		// precedes every position the search will visit.
+		stack: append(append(make([]uint64, 0, len(opts.History)+maxPly+1), opts.History...), rootHash),
+
+		// Sized for maxPly plies of maxMoves, which keeps the search
+		// allocation free at any reachable depth.
+		moves: make([]Move, 0, maxPly*maxMoves),
+	}
 }
 
 // SearchBestMove initiates an asynchronous search for the best move.
@@ -149,7 +212,9 @@ func SearchBestMove(p *Position, opts *SearchOptions) (chan Evaluation, context.
 		opts = defaultSearchOptions
 	}
 
-	ch := make(chan Evaluation)
+	// Buffered: every thread may report, and a report happens under a lock,
+	// so a send must not block on the consumer.
+	ch := make(chan Evaluation, maxPly)
 	ctx, cancel := context.WithCancel(context.Background())
 
 	if opts.MaxTime != 0 {
@@ -174,19 +239,12 @@ func SearchBestMove(p *Position, opts *SearchOptions) (chan Evaluation, context.
 			}
 		}
 
-		// The move buffer is shared by every ply: each node carves its own
-		// slice off the tail of its parent's. Sizing it for maxPly plies of
-		// maxMoves keeps the search allocation free at any reachable depth.
-		rootMoves := make([]Move, 0, maxPly*maxMoves)
-		newPos := Position{}
-
+		var rootMoves []Move
 		rootMoves, _ = LegalMoves(rootMoves, p)
 		if len(opts.Moves) > 0 {
 			rootMoves = filterMoves(rootMoves, opts.Moves)
 		}
-
-		count := len(rootMoves)
-		if count == 0 {
+		if len(rootMoves) == 0 {
 			return
 		}
 
@@ -195,14 +253,9 @@ func SearchBestMove(p *Position, opts *SearchOptions) (chan Evaluation, context.
 			maxDepth = maxPly - 1
 		}
 
-		searchCtx := &searchCtx{
-			Context:  ctx,
-			maxNodes: opts.MaxNodes,
-			tt:       opts.TranspositionTable,
-
-			// The root position itself terminates the repetition stack: it
-			// precedes every position the search will visit.
-			stack: append(append(make([]uint64, 0, len(opts.History)+maxPly+1), opts.History...), p.hash),
+		threads := opts.Threads
+		if threads < 1 {
+			threads = 1
 		}
 
 		// Everything already in the table belongs to an earlier search from
@@ -214,92 +267,191 @@ func SearchBestMove(p *Position, opts *SearchOptions) (chan Evaluation, context.
 		// below it derives its own from its parent's.
 		rootAcc := NewPestoState(p)
 
-		// Order the root moves once before the first iteration. Later
-		// iterations reuse the previous iteration's best move instead,
-		// which is a far stronger signal than any static ordering.
+		// Order the root moves once, before any thread starts, so every
+		// thread begins from the same list. Later iterations reuse the
+		// previous iteration's best move instead, which is a far stronger
+		// signal than any static ordering.
+		ordering := &searchCtx{}
 		var rootScores [maxMoves]int32
-		searchCtx.scoreMoves(&rootScores, rootMoves, p, Move(0), 0)
+		ordering.scoreMoves(&rootScores, rootMoves, p, Move(0), 0)
 		for i := range rootMoves {
 			pickNextMove(rootMoves, &rootScores, i)
 		}
 
-	loop:
-		// iterative deepening
-		for depth := 1; depth <= maxDepth; depth++ {
-			bestMoveAtDepth := rootMoves[0]
-			bestScoreAtDepth := -Inf
-			alpha := -Inf
-			beta := Inf
+		// Lazy SMP: every thread searches the same root independently and
+		// they share nothing but the transposition table. There is no work
+		// splitting and no synchronisation -- a thread that finds something
+		// useful leaves it in the table, and the others pick it up as move
+		// ordering or as a cutoff. It scales worse than a partitioned search
+		// in theory and better in practice, because the coordination it does
+		// not do is the part that costs.
+		totals := &searchTotals{}
+		result := &searchResult{}
 
-			// first marks the move that gets the full window; the rest are
-			// probed with a null window and re-searched only if they beat it.
-			// Root moves are never reduced -- there are few of them and the
-			// answer the whole search exists to produce is chosen here.
+		var wg sync.WaitGroup
+		for t := 0; t < threads; t++ {
+			wg.Add(1)
 
-			// evaluate each root move
-			for i, m := range rootMoves {
+			go func(t int) {
+				defer wg.Done()
 
-				newPos = *p
-				newPos.Do(m)
+				sc := newSearchCtx(ctx, opts, threads, totals, p.hash)
 
-				childAcc := rootAcc.Updated(p, &newPos)
-				childMoves := rootMoves[count:]
+				// Each thread reorders its own list as it goes, so it needs
+				// its own copy of it, laid out at the front of its own move
+				// buffer.
+				sc.moves = sc.moves[:len(rootMoves)]
+				copy(sc.moves, rootMoves)
 
-				var score, child int
-				var err error
-
-				if i == 0 {
-					child, err = negamax(searchCtx, &newPos, childAcc, childMoves, -beta, -alpha, depth-1, 1)
-					score = -child
-				} else {
-					child, err = negamax(searchCtx, &newPos, childAcc, childMoves, -alpha-1, -alpha, depth-1, 1)
-					score = -child
-
-					if err == nil && score > alpha {
-						child, err = negamax(searchCtx, &newPos, childAcc, childMoves, -beta, -alpha, depth-1, 1)
-						score = -child
-					}
-				}
-
-				if err != nil {
-					break loop
-				}
-
-				if score > bestScoreAtDepth {
-					bestScoreAtDepth = score
-					bestMoveAtDepth = m
-
-					if score > alpha {
-						alpha = score
-					}
-				}
-
-			}
-
-			// Search this iteration's best move first at the next depth.
-			// This is the main reason iterative deepening pays for itself:
-			// an immediate cutoff on move one shrinks the entire tree.
-			moveToFront(rootMoves, bestMoveAtDepth)
-
-			// inform the current evaluation
-			ch <- Evaluation{
-				Depth:  depth,
-				Best:   bestMoveAtDepth,
-				Score:  bestScoreAtDepth,
-				Nodes:  searchCtx.nodes,
-				QNodes: searchCtx.qnodes,
-			}
-
-			// check for context cancellation
-			select {
-			case <-ctx.Done():
-				break loop
-			default:
-			}
+				runSearch(sc, p, rootAcc, maxDepth, t, result, ch)
+			}(t)
 		}
+
+		wg.Wait()
 	}()
 
 	return ch, cancel
+}
+
+// runSearch is one thread's iterative deepening from the root.
+//
+// startDepth lets threads begin at different depths so they diverge; report
+// is nil for every thread but the one whose results are the search's answer.
+// Depth schedules for the helper threads.
+//
+// Lazy SMP only pays if the threads search different trees. Given the same
+// depth they read the same table entries, take the same cutoffs and retrace
+// the same nodes, which is eight threads doing one thread's work. These
+// patterns spread the helpers across several depths at once, so each is
+// exploring somewhere the others are not and the entries they leave behind
+// are worth something to the thread that needs them.
+var (
+	smpSkipSize  = [20]int{1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 6, 6, 6, 6}
+	smpSkipPhase = [20]int{0, 1, 0, 1, 2, 0, 1, 2, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3}
+)
+
+// skipDepth reports whether a thread passes over the given depth. Thread zero
+// searches every one of them, so the search always has someone working
+// through the sequence in order; the helpers each skip to a different rhythm.
+func skipDepth(thread, depth int) bool {
+	if thread == 0 {
+		return false
+	}
+
+	i := (thread - 1) % len(smpSkipSize)
+	return ((depth+smpSkipPhase[i])/smpSkipSize[i])%2 != 0
+}
+
+// searchResult is the deepest completed iteration any thread has produced.
+//
+// Without it a helper that reaches a depth before the main thread has its
+// work thrown away, which is most of what the helpers are for.
+type searchResult struct {
+	mu    sync.Mutex
+	depth int
+}
+
+// offer reports e if it is deeper than anything reported so far.
+func (r *searchResult) offer(e Evaluation, ch chan Evaluation) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if e.Depth <= r.depth {
+		return
+	}
+	r.depth = e.Depth
+
+	// The channel is buffered, so a slow consumer cannot stall the search
+	// while this lock is held.
+	ch <- e
+}
+
+func runSearch(ctx *searchCtx, p *Position, rootAcc PestoState, maxDepth, threadID int, result *searchResult, ch chan Evaluation) {
+	rootMoves := ctx.moves
+	count := len(rootMoves)
+
+	var newPos Position
+
+loop:
+	for depth := 1; depth <= maxDepth; depth++ {
+		if skipDepth(threadID, depth) {
+			continue
+		}
+
+		bestMoveAtDepth := rootMoves[0]
+		bestScoreAtDepth := -Inf
+		alpha := -Inf
+		beta := Inf
+
+		// first marks the move that gets the full window; the rest are
+		// probed with a null window and re-searched only if they beat it.
+		// Root moves are never reduced -- there are few of them and the
+		// answer the whole search exists to produce is chosen here.
+		first := true
+
+		for _, m := range rootMoves {
+			newPos = *p
+			newPos.Do(m)
+
+			childAcc := rootAcc.Updated(p, &newPos)
+			childMoves := rootMoves[count:]
+
+			var score, child int
+			var err error
+
+			if first {
+				child, err = negamax(ctx, &newPos, childAcc, childMoves, -beta, -alpha, depth-1, 1)
+				score = -child
+				first = false
+			} else {
+				child, err = negamax(ctx, &newPos, childAcc, childMoves, -alpha-1, -alpha, depth-1, 1)
+				score = -child
+
+				if err == nil && score > alpha {
+					child, err = negamax(ctx, &newPos, childAcc, childMoves, -beta, -alpha, depth-1, 1)
+					score = -child
+				}
+			}
+
+			if err != nil {
+				break loop
+			}
+
+			if score > bestScoreAtDepth {
+				bestScoreAtDepth = score
+				bestMoveAtDepth = m
+
+				if score > alpha {
+					alpha = score
+				}
+			}
+		}
+
+		// Search this iteration's best move first at the next depth. This is
+		// the main reason iterative deepening pays for itself: an immediate
+		// cutoff on move one shrinks the entire tree.
+		moveToFront(rootMoves, bestMoveAtDepth)
+
+		ctx.publish()
+
+		result.offer(Evaluation{
+			Depth:  depth,
+			Best:   bestMoveAtDepth,
+			Score:  bestScoreAtDepth,
+			Nodes:  ctx.totals.nodes.Load(),
+			QNodes: ctx.totals.qnodes.Load(),
+		}, ch)
+
+		select {
+		case <-ctx.Done():
+			break loop
+		default:
+		}
+	}
+
+	// Whatever this thread got through still counts, even if it was cut off
+	// part way into an iteration.
+	ctx.publish()
 }
 
 // filterMoves returns a subset of allMoves that are also present in wantMoves.
